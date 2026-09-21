@@ -1,4 +1,8 @@
-"""Neuron models for spiking neural networks."""
+"""Neuron models for spiking neural networks.
+
+Provides abstract and concrete neuron implementations used in
+spiking neural network simulation and training.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +12,24 @@ import numpy as np
 
 
 class NeuronModel(ABC):
-    """Abstract base class for all neuron models."""
+    """Abstract base class for all neuron models.
+
+    Defines the interface that every neuron model must implement:
+    advancing by one timestep, resetting state, and querying the
+    membrane potential.
+    """
 
     @abstractmethod
     def step(self, input_current: float, dt: float) -> bool:
-        """Advance one timestep. Returns True if the neuron fires a spike."""
+        """Advance the neuron by one timestep.
+
+        Args:
+            input_current (float): Total input current delivered to the neuron.
+            dt (float): Duration of the timestep in simulation units.
+
+        Returns:
+            bool: True if the neuron emits a spike, False otherwise.
+        """
 
     @abstractmethod
     def reset(self) -> None:
@@ -20,7 +37,11 @@ class NeuronModel(ABC):
 
     @abstractmethod
     def get_potential(self) -> float:
-        """Return the current membrane potential."""
+        """Return the current membrane potential.
+
+        Returns:
+            float: The membrane potential in mV (or model-native units).
+        """
 
 
 class LIFNeuron(NeuronModel):
@@ -31,6 +52,14 @@ class LIFNeuron(NeuronModel):
     During the refractory period the voltage is clamped to ``v_reset``
     and the neuron cannot fire.  On a spike the voltage goes to
     ``v_reset`` and the refractory timer starts.
+
+    Attributes:
+        tau_mem: Membrane time constant (ms).
+        v_rest: Resting membrane potential (mV).
+        v_thresh: Spike threshold (mV).
+        v_reset: Reset voltage after a spike (mV).
+        t_refrac: Refractory period duration (ms).
+        R_mem: Membrane resistance (MOhm).
     """
 
     def __init__(
@@ -42,6 +71,16 @@ class LIFNeuron(NeuronModel):
         t_refrac: float = 3.0,
         R_mem: float = 10.0,
     ) -> None:
+        """Initialise a Leaky Integrate-and-Fire neuron.
+
+        Args:
+            tau_mem (float): Membrane time constant (ms).
+            v_rest (float): Resting membrane potential (mV).
+            v_thresh (float): Spike threshold (mV).
+            v_reset (float): Reset voltage after a spike (mV).
+            t_refrac (float): Refractory period duration (ms).
+            R_mem (float): Membrane resistance (MOhm).
+        """
         self.tau_mem = tau_mem
         self.v_rest = v_rest
         self.v_thresh = v_thresh
@@ -53,6 +92,18 @@ class LIFNeuron(NeuronModel):
         self._refrac_remaining: float = 0.0
 
     def step(self, input_current: float, dt: float) -> bool:
+        """Advance one timestep using the LIF update rule.
+
+        During the refractory period the neuron is clamped to ``v_reset``
+        and always returns False.
+
+        Args:
+            input_current (float): Total input current delivered to the neuron.
+            dt (float): Duration of the timestep in ms.
+
+        Returns:
+            bool: True if the neuron fires a spike, False otherwise.
+        """
         if self._refrac_remaining > 0.0:
             self._refrac_remaining -= dt
             return False
@@ -67,10 +118,16 @@ class LIFNeuron(NeuronModel):
         return False
 
     def reset(self) -> None:
+        """Reset the neuron to its resting state."""
         self._v = self.v_rest
         self._refrac_remaining = 0.0
 
     def get_potential(self) -> float:
+        """Return the current membrane potential.
+
+        Returns:
+            float: The membrane potential in mV.
+        """
         return self._v
 
 
@@ -81,6 +138,13 @@ class SpikingNeuron(NeuronModel):
     each step when above ``rest``, and spikes when it reaches
     ``threshold``.  After a spike the neuron enters a refractory period
     of ``refrac_time`` steps.
+
+    Attributes:
+        threshold: Spike threshold.
+        rest: Resting potential (reset value after a spike).
+        min_pot: Minimum potential used for lateral inhibition.
+        leak: Leak subtracted from potential each active step.
+        refrac_time: Refractory period in number of timesteps.
     """
 
     def __init__(
@@ -91,6 +155,15 @@ class SpikingNeuron(NeuronModel):
         leak: float = 1.0,
         refrac_time: int = 30,
     ) -> None:
+        """Initialise a simple spiking neuron.
+
+        Args:
+            threshold (float): Potential value at which the neuron spikes.
+            rest (float): Resting potential and post-spike reset value.
+            min_pot (float): Minimum potential (used for lateral inhibition).
+            leak (float): Amount subtracted from potential each active step.
+            refrac_time (int): Refractory period in number of timesteps.
+        """
         self.threshold = threshold
         self.rest = rest
         self.min_pot = min_pot
@@ -105,6 +178,14 @@ class SpikingNeuron(NeuronModel):
 
         ``input_current`` is treated as the dot-product of weights and
         incoming spikes (already computed by the caller).
+
+        Args:
+            input_current (float): Weighted sum of incoming spikes.
+            dt (float): Duration of the timestep (unused in this model, kept
+                for interface compatibility).
+
+        Returns:
+            bool: True if the neuron fires a spike, False otherwise.
         """
         if self._refrac_counter > 0:
             self._refrac_counter -= 1
@@ -121,10 +202,16 @@ class SpikingNeuron(NeuronModel):
         return False
 
     def reset(self) -> None:
+        """Reset the neuron to its resting state."""
         self._potential = self.rest
         self._refrac_counter = 0
 
     def get_potential(self) -> float:
+        """Return the current membrane potential.
+
+        Returns:
+            float: The neuron's potential value.
+        """
         return self._potential
 
     def inhibit(self) -> None:

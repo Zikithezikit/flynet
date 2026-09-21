@@ -24,24 +24,25 @@ class RewardHebbian:
         """Initialize the Hebbian learner.
 
         Args:
-            eta: Learning rate.
-            reward_bonus: Extra reward for reaching the goal.
+            eta (float): Learning rate.
+            reward_bonus (float): Extra reward for reaching the goal.
         """
         self.eta = eta
         self.reward_bonus = reward_bonus
 
-    def update(self, network, events: list, W=None) -> None:
+    def update(self, network: "SpikingNetwork", events: list, W: np.ndarray | None = None) -> None:
         """Apply Hebbian updates to the network weights.
 
         Args:
-            network: SpikingNetwork instance with ``rows`` and ``cols``
-                attributes (COO views of the synapse matrix).
-            events: List of ``(rho_right, rho_left, activity_vector)``
+            network (SpikingNetwork): SpikingNetwork instance with ``rows``
+                and ``cols`` attributes (COO views of the synapse matrix).
+            events (list): List of ``(rho_right, rho_left, activity_vector)``
                 tuples from successful games.
-            W: Weight matrix to update.  Default: ``network.W``.
+            W (np.ndarray | None): Weight matrix to update.
+                Default: ``network.W``.
 
         Returns:
-            None.  Updates *W* in place.
+            None: Updates *W* in place.
         """
         if W is None:
             W = network.W
@@ -82,10 +83,11 @@ class STDPTrainer:
         """Initialize the STDP trainer.
 
         Args:
-            n_neurons: Number of output neurons.
-            n_inputs: Number of input features.
-            stdp_rule: STDPRule instance.  Default: standard parameters.
-            neuron_params: Dict of SpikingNeuron parameters.
+            n_neurons (int): Number of output neurons.
+            n_inputs (int): Number of input features.
+            stdp_rule (STDPRule | None): STDPRule instance.
+                Default: standard parameters.
+            neuron_params (dict | None): Dict of SpikingNeuron parameters.
         """
         self.n_neurons = n_neurons
         self.n_inputs = n_inputs
@@ -109,12 +111,15 @@ class STDPTrainer:
         """Run one training step on a spike train.
 
         Args:
-            spike_train: Binary array ``(n_inputs, t_steps + 1)``.
-            synapses: SynapseList to update.
-            threshold: Firing threshold.  Auto-computed if ``None``.
+            spike_train (np.ndarray): Binary array
+                ``(n_inputs, t_steps + 1)``.
+            synapses (SynapseList): SynapseList to update.
+            threshold (float | None): Firing threshold.
+                Auto-computed if ``None``.
 
         Returns:
-            Dict with ``'spikes'``, ``'potentials'``, ``'winner'`` info.
+            dict: Dict with ``'spikes'``, ``'potentials'``,
+                ``'winner'`` info.
         """
         n = self.n_neurons
         m = self.n_inputs
@@ -181,6 +186,17 @@ class STDPTrainer:
 
         Checks input spikes in the time window around the spike and
         updates weights using the STDP rule.
+
+        Args:
+            neuron_idx (int): Index of the neuron that fired.
+            spike_time (int): Timestep at which the neuron fired.
+            spike_train (np.ndarray): Binary array
+                ``(n_inputs, t_steps + 1)`` of input spikes.
+            synapses (SynapseList): SynapseList whose weights are updated.
+            T (int): Total number of simulation timesteps.
+
+        Returns:
+            None: Updates synapse weights in place.
         """
         t_back = -20
         t_fore = 20
@@ -212,13 +228,13 @@ class STDPTrainer:
         """Run multiple epochs over a set of images.
 
         Args:
-            images: List of 2D arrays (one per image).
-            synapses: SynapseList to train.
-            epochs: Number of full passes.
-            t_steps: Number of simulation timesteps.
+            images (list): List of 2D arrays (one per image).
+            synapses (SynapseList): SynapseList to train.
+            epochs (int): Number of full passes.
+            t_steps (int): Number of simulation timesteps.
 
         Returns:
-            List of result dicts, one per image per epoch.
+            list[dict]: List of result dicts, one per image per epoch.
         """
         from flynet.encoding import rate_encode
 
@@ -233,22 +249,29 @@ class STDPTrainer:
 
 
 class TrainingLogger:
-    """Log training progress for visualization."""
+    """Log training progress for visualization.
+
+    Attributes:
+        episode_rewards: List of total rewards per episode.
+        episode_steps: List of timestep counts per episode.
+        weight_history: List of weight matrix snapshots per episode.
+    """
 
     def __init__(self) -> None:
+        """Initialize the training logger with empty history lists."""
         self.episode_rewards: list[float] = []
         self.episode_steps: list[int] = []
         self.weight_history: list = []
 
     def log_episode(
-        self, reward: float, steps: int, W=None
+        self, reward: float, steps: int, W: np.ndarray | None = None
     ) -> None:
         """Record one episode.
 
         Args:
-            reward: Total reward for the episode.
-            steps: Number of timesteps taken.
-            W: Optional weight matrix snapshot.
+            reward (float): Total reward for the episode.
+            steps (int): Number of timesteps taken.
+            W (np.ndarray | None): Optional weight matrix snapshot.
         """
         self.episode_rewards.append(reward)
         self.episode_steps.append(steps)
@@ -259,7 +282,7 @@ class TrainingLogger:
         """Return episode numbers and average steps for plotting.
 
         Returns:
-            ``(episode_numbers, avg_steps)``.
+            tuple[list[int], list[float]]: ``(episode_numbers, avg_steps)``.
         """
         n = len(self.episode_steps)
         episodes = list(range(1, n + 1))
@@ -269,7 +292,7 @@ class TrainingLogger:
         """Return episode numbers and rewards for plotting.
 
         Returns:
-            ``(episode_numbers, rewards)``.
+            tuple[list[int], list[float]]: ``(episode_numbers, rewards)``.
         """
         n = len(self.episode_rewards)
         episodes = list(range(1, n + 1))

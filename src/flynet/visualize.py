@@ -12,7 +12,12 @@ import numpy as np
 
 if TYPE_CHECKING:
     import matplotlib.axes
+    import scipy.sparse
     from matplotlib.figure import Figure
+
+    from flynet.learning import TrainingLogger
+    from flynet.network import SpikingNetwork
+    from flynet.synapses import SynapseList
 
 try:
     import networkx as nx
@@ -26,7 +31,7 @@ except ImportError:
 
 
 def plot_brain_circuit(
-    network,
+    network: SpikingNetwork,
     ax: matplotlib.axes.Axes | None = None,
     show_sensors: bool = True,
     show_motors: bool = True,
@@ -39,15 +44,15 @@ def plot_brain_circuit(
     Edge thickness is proportional to weight.
 
     Args:
-        network: SpikingNetwork instance.
-        ax: Matplotlib axes.  Creates a new figure if ``None``.
-        show_sensors: Whether to highlight sensor neurons.
-        show_motors: Whether to highlight motor neurons.
-        max_edges: Maximum number of edges to draw.
-        title: Plot title.
+        network (SpikingNetwork): SpikingNetwork instance.
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.  Creates a new figure if ``None``.
+        show_sensors (bool): Whether to highlight sensor neurons.
+        show_motors (bool): Whether to highlight motor neurons.
+        max_edges (int): Maximum number of edges to draw.
+        title (str): Plot title.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -189,14 +194,14 @@ def plot_trajectory(
     """Plot the fly trajectory in the 2D arena.
 
     Args:
-        path: List of ``(x, y)`` positions.
-        food_pos: ``(x, y)`` of the food source.
-        start_pos: ``(x, y)`` of the starting position.
-        ax: Matplotlib axes.
-        title: Plot title.
+        path (list[tuple[float, float]]): List of ``(x, y)`` positions.
+        food_pos (tuple[float, float]): ``(x, y)`` of the food source.
+        start_pos (tuple[float, float] | None): ``(x, y)`` of the starting position.
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.
+        title (str): Plot title.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -227,7 +232,7 @@ def plot_trajectory(
 
 
 def plot_learning_curve(
-    logger,
+    logger: TrainingLogger,
     ax: matplotlib.axes.Axes | None = None,
     title: str = "Learning Curve",
     window: int = 10,
@@ -235,13 +240,13 @@ def plot_learning_curve(
     """Plot average steps per episode.
 
     Args:
-        logger: TrainingLogger instance.
-        ax: Matplotlib axes.
-        title: Plot title.
-        window: Smoothing window size.
+        logger (TrainingLogger): TrainingLogger instance.
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.
+        title (str): Plot title.
+        window (int): Smoothing window size.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -272,8 +277,8 @@ def plot_learning_curve(
 
 
 def plot_plasticity_heatmap(
-    W_before,
-    W_after,
+    W_before: scipy.sparse.spmatrix | np.ndarray,
+    W_after: scipy.sparse.spmatrix | np.ndarray,
     ax: matplotlib.axes.Axes | None = None,
     title: str = "Weight Changes",
     max_display: int = 100,
@@ -281,14 +286,14 @@ def plot_plasticity_heatmap(
     """Plot heatmap of weight changes after training.
 
     Args:
-        W_before: Sparse matrix (before training).
-        W_after: Sparse matrix (after training).
-        ax: Matplotlib axes.
-        title: Plot title.
-        max_display: Maximum matrix dimension to display.
+        W_before (scipy.sparse.spmatrix | np.ndarray): Sparse matrix (before training).
+        W_after (scipy.sparse.spmatrix | np.ndarray): Sparse matrix (after training).
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.
+        title (str): Plot title.
+        max_display (int): Maximum matrix dimension to display.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -323,12 +328,12 @@ def plot_spike_raster(
     """Plot spike raster (neuron index vs time).
 
     Args:
-        spike_train: Binary array ``(n_neurons, t_steps + 1)``.
-        ax: Matplotlib axes.
-        title: Plot title.
+        spike_train (np.ndarray): Binary array ``(n_neurons, t_steps + 1)``.
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.
+        title (str): Plot title.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -356,7 +361,7 @@ def plot_spike_raster(
 
 
 def plot_weight_matrix(
-    synapses,
+    synapses: SynapseList | scipy.sparse.spmatrix | np.ndarray,
     ax: matplotlib.axes.Axes | None = None,
     title: str = "Weight Matrix",
     max_display: int = 100,
@@ -364,13 +369,13 @@ def plot_weight_matrix(
     """Plot the weight matrix as a heatmap.
 
     Args:
-        synapses: SynapseList or 2D array.
-        ax: Matplotlib axes.
-        title: Plot title.
-        max_display: Maximum matrix dimension to display.
+        synapses (SynapseList | scipy.sparse.spmatrix | np.ndarray): SynapseList or 2D array.
+        ax (matplotlib.axes.Axes | None): Matplotlib axes.
+        title (str): Plot title.
+        max_display (int): Maximum matrix dimension to display.
 
     Returns:
-        The matplotlib Axes object.
+        matplotlib.axes.Axes: The matplotlib Axes object.
     """
     import matplotlib.pyplot as plt
 
@@ -397,16 +402,16 @@ def plot_weight_matrix(
 
 
 def create_gif(
-    frames: list,
+    frames: list[Figure | np.ndarray],
     path: str,
     fps: int = 20,
 ) -> None:
     """Create an animated GIF from a list of matplotlib figures or numpy arrays.
 
     Args:
-        frames: List of Figure objects or 2D/3D numpy arrays (images).
-        path: Output file path (should end in ``.gif``).
-        fps: Frames per second.
+        frames (list[Figure | np.ndarray]): List of Figure objects or 2D/3D numpy arrays (images).
+        path (str): Output file path (should end in ``.gif``).
+        fps (int): Frames per second.
     """
     if PILImage is None:
         raise ImportError("Pillow is required for GIF creation: pip install Pillow")

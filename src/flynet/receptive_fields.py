@@ -17,15 +17,8 @@ except ImportError:
 class ReceptiveField:
     """2D Gaussian-weighted receptive field (on-center or off-center).
 
-    Parameters
-    ----------
-    size : int
-        Kernel side length (must be odd).
-    sigma : float or None
-        Standard deviation of the Gaussian. Defaults to ``size / 6``.
-    on_center : bool
-        If ``True`` the centre is positive and surround is negative (on-centre).
-        If ``False`` the signs are flipped (off-centre / surround-dominant).
+    Attributes:
+        kernel: The 2D kernel array used for convolution.
     """
 
     def __init__(
@@ -34,6 +27,19 @@ class ReceptiveField:
         sigma: float | None = None,
         on_center: bool = True,
     ) -> None:
+        """Initialise the receptive field.
+
+        Args:
+            size (int): Kernel side length (must be odd).
+            sigma (float | None): Standard deviation of the Gaussian. Defaults to
+                ``size / 6``.
+            on_center (bool): If ``True`` the centre is positive and surround is
+                negative (on-centre). If ``False`` the signs are flipped
+                (off-centre / surround-dominant).
+
+        Raises:
+            ValueError: If ``size`` is not odd.
+        """
         if size % 2 == 0:
             raise ValueError(f"size must be odd, got {size}")
         self._size = size
@@ -73,17 +79,16 @@ class ReceptiveField:
         return self._kernel
 
     def apply(self, image: np.ndarray) -> np.ndarray:
-        """Convolve *image* with this receptive field kernel.
+        """Convolve an image with this receptive field kernel.
 
-        Parameters
-        ----------
-        image : np.ndarray
-            2D array representing the input image / feature map.
+        Args:
+            image (np.ndarray): 2D array representing the input image or feature map.
 
-        Returns
-        -------
-        np.ndarray
-            Convolved potential map of the same spatial size as the input.
+        Returns:
+            np.ndarray: Convolved potential map of the same spatial size as the input.
+
+        Raises:
+            ValueError: If ``image`` is not a 2D array.
         """
         image = np.asarray(image, dtype=np.float64)
         if image.ndim == 1:
@@ -101,15 +106,14 @@ def manhattan_rf(size: int = 5) -> np.ndarray:
     Follows the pattern from the Spiking-Neural-Network ``receptive_field.py``:
     ``weight = -0.375 * distance + 1`` for each cell in the kernel.
 
-    Parameters
-    ----------
-    size : int
-        Kernel side length (must be odd).
+    Args:
+        size (int): Kernel side length (must be odd).
 
-    Returns
-    -------
-    np.ndarray
-        2D array of shape ``(size, size)``.
+    Returns:
+        np.ndarray: 2D array of shape ``(size, size)``.
+
+    Raises:
+        ValueError: If ``size`` is not odd.
     """
     if size % 2 == 0:
         raise ValueError(f"size must be odd, got {size}")
@@ -128,17 +132,15 @@ def apply_rf(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     Uses ``scipy.signal.fftconvolve`` when available, otherwise falls back
     to a zero-padded sliding-window implementation.
 
-    Parameters
-    ----------
-    image : np.ndarray
-        2D input array.
-    kernel : np.ndarray
-        2D convolution kernel (should be smaller than *image*).
+    Args:
+        image (np.ndarray): 2D input array.
+        kernel (np.ndarray): 2D convolution kernel (should be smaller than *image*).
 
-    Returns
-    -------
-    np.ndarray
-        Potential map of the same spatial size as *image*.
+    Returns:
+        np.ndarray: Potential map of the same spatial size as *image*.
+
+    Raises:
+        ValueError: If ``image`` or ``kernel`` is not 2D.
     """
     image = np.asarray(image, dtype=np.float64)
     kernel = np.asarray(kernel, dtype=np.float64)

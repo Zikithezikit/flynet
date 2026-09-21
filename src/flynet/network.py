@@ -34,11 +34,11 @@ class SpikingNetwork:
         """Build a spiking network from connectome data.
 
         Args:
-            ids: Neuron body IDs participating in the network.
-            edges: ``(pre_body, post_body, weight)`` synapses.
-            sensor_ids: IDs of sensory input neurons (auto-detected if
+            ids (list[int]): Neuron body IDs participating in the network.
+            edges (list[tuple[int, int, float]]): ``(pre_body, post_body, weight)`` synapses.
+            sensor_ids (list[int] | None): IDs of sensory input neurons (auto-detected if
                 ``None``).
-            motor_ids: IDs of motor output neurons (auto-detected if ``None``).
+            motor_ids (list[int] | None): IDs of motor output neurons (auto-detected if ``None``).
         """
         self.ids: list[int] = list(ids)
         self._ix: dict[int, int] = {body: i for i, body in enumerate(self.ids)}
@@ -76,10 +76,10 @@ class SpikingNetwork:
         CSR matrices.
 
         Args:
-            edges: The synapse triples.
+            edges (list[tuple[int, int, float]]): The synapse triples.
 
         Returns:
-            ``(W, W_raw)`` – the normalized and raw matrices.
+            tuple[sp.csr_matrix, sp.csr_matrix]: ``(W, W_raw)`` – the normalized and raw matrices.
         """
         n = len(self.ids)
         r = np.fromiter(
@@ -116,6 +116,9 @@ class SpikingNetwork:
 
         Motors are the two neurons whose column in ``W_raw`` has the
         largest sum -- i.e. they receive the most total synaptic drive.
+
+        Returns:
+            list[int]: Body IDs of the detected motor neurons.
         """
         ind = np.asarray(self.W_raw.sum(axis=0)).ravel()
         order = np.argsort(ind)[::-1]
@@ -128,6 +131,9 @@ class SpikingNetwork:
         (highest raw weight into the motor).  Falls back to neurons with
         the largest total *outgoing* weight if no presynaptic partners
         exist.
+
+        Returns:
+            list[int]: Body IDs of the detected sensor neurons.
         """
         sensors: list[int] = []
         for m in self.motors:
@@ -184,13 +190,16 @@ class SpikingNetwork:
         the left sensor.
 
         Args:
-            z_right: Injection into the right sensor channel.
-            z_left: Injection into the left sensor channel.
-            iterations: Number of settling iterations.
-            activation: Nonlinearity to apply (``"tanh"`` or ``"relu"``).
+            z_right (float): Injection into the right sensor channel.
+            z_left (float): Injection into the left sensor channel.
+            iterations (int): Number of settling iterations.
+            activation (str): Nonlinearity to apply (``"tanh"`` or ``"relu"``).
 
         Returns:
-            List of activity vectors (oldest first).
+            list[np.ndarray]: List of activity vectors (oldest first).
+
+        Raises:
+            ValueError: When *activation* is not ``"tanh"`` or ``"relu"``.
         """
         n = len(self.ids)
         z = np.zeros(n)
@@ -221,7 +230,16 @@ class SpikingNetwork:
     def _readout(
         self, W: sp.csr_matrix, zr: float, zl: float
     ) -> tuple[float, float]:
-        """Settle and return the two motor activities."""
+        """Settle and return the two motor activities.
+
+        Args:
+            W (sp.csr_matrix): Weight matrix to use for settling.
+            zr (float): Right sensor injection value.
+            zl (float): Left sensor injection value.
+
+        Returns:
+            tuple[float, float]: ``(motor0, motor1)`` activity values.
+        """
         a = self.settle(zr, zl)[-1]
         m = [self._ix[b] for b in self.motors[:2]]
         if len(m) < 2:
@@ -236,8 +254,11 @@ class SpikingNetwork:
         Probes each sensor independently and reads motor output after
         settling.
 
+        Args:
+            W (sp.csr_matrix | None): Weight matrix to use (default: ``self.W``).
+
         Returns:
-            ``(M, pinv(M))`` where ``M`` is a 2×2 response matrix mapping
+            tuple[np.ndarray, np.ndarray]: ``(M, pinv(M))`` where ``M`` is a 2×2 response matrix mapping
             sensor injections to motor differences.
         """
         W = self.W if W is None else W
@@ -272,12 +293,12 @@ class SpikingNetwork:
         the network, and returns the motor difference.
 
         Args:
-            rho_right: Desired smell reading on the right antenna.
-            rho_left: Desired smell reading on the left antenna.
-            W: Weight matrix to use (default: ``self.W``).
+            rho_right (float): Desired smell reading on the right antenna.
+            rho_left (float): Desired smell reading on the left antenna.
+            W (sp.csr_matrix | None): Weight matrix to use (default: ``self.W``).
 
         Returns:
-            ``(drv, trace)`` – the motor difference and the full
+            tuple[float, list[np.ndarray]]: ``(drv, trace)`` – the motor difference and the full
             settling trace.
         """
         W = self.W if W is None else W
@@ -296,7 +317,15 @@ class SpikingNetwork:
     # ------------------------------------------------------------------
 
     def get_weight(self, pre: int, post: int) -> float:
-        """Get synapse weight (normalized)."""
+        """Get synapse weight (normalized).
+
+        Args:
+            pre (int): Presynaptic neuron body ID.
+            post (int): Postsynaptic neuron body ID.
+
+        Returns:
+            float: The normalized weight, or ``0.0`` if no connection exists.
+        """
         i, j = self._ix[pre], self._ix[post]
         mask = (self.rows == i) & (self.cols == j)
         if not mask.any():
@@ -304,7 +333,16 @@ class SpikingNetwork:
         return float(self.wts[np.flatnonzero(mask)[0]])
 
     def set_weight(self, pre: int, post: int, w: float) -> None:
-        """Set synapse weight (normalized)."""
+        """Set synapse weight (normalized).
+
+        Args:
+            pre (int): Presynaptic neuron body ID.
+            post (int): Postsynaptic neuron body ID.
+            w (float): New normalized weight value.
+
+        Returns:
+            None
+        """
         i, j = self._ix[pre], self._ix[post]
         self.W[i, j] = w
 
@@ -318,11 +356,11 @@ class SpikingNetwork:
         """List partners projecting INTO *body*.
 
         Args:
-            body: Postsynaptic body ID.
-            raw: Use raw connectome weights instead of normalized.
+            body (int): Postsynaptic body ID.
+            raw (bool): Use raw connectome weights instead of normalized.
 
         Returns:
-            ``[(partner_id, weight), ...]`` for every non-zero input.
+            list[tuple[int, float]]: ``[(partner_id, weight), ...]`` for every non-zero input.
         """
         j = self._ix[body]
         coo = self._raw_coo if raw else self._coo
@@ -336,11 +374,11 @@ class SpikingNetwork:
         """List partners *body* projects INTO.
 
         Args:
-            body: Presynaptic body ID.
-            raw: Use raw connectome weights instead of normalized.
+            body (int): Presynaptic body ID.
+            raw (bool): Use raw connectome weights instead of normalized.
 
         Returns:
-            ``[(partner_id, weight), ...]`` for every non-zero output.
+            list[tuple[int, float]]: ``[(partner_id, weight), ...]`` for every non-zero output.
         """
         i = self._ix[body]
         coo = self._raw_coo if raw else self._coo
@@ -356,10 +394,10 @@ class SpikingNetwork:
         """Return IDs of neurons above *threshold* after last settle.
 
         Args:
-            threshold: Minimum absolute activity to include.
+            threshold (float): Minimum absolute activity to include.
 
         Returns:
-            List of body IDs of active neurons.
+            list[int]: List of body IDs of active neurons.
         """
         if self._last_activity is None:
             return []
@@ -372,5 +410,9 @@ class SpikingNetwork:
     # ------------------------------------------------------------------
 
     def copy(self) -> SpikingNetwork:
-        """Return a deep copy of the network."""
+        """Return a deep copy of the network.
+
+        Returns:
+            SpikingNetwork: A fully independent copy of this ``SpikingNetwork``.
+        """
         return copy.deepcopy(self)

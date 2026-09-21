@@ -28,8 +28,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-neuprint = ["neuprint-python>=0.10", "pandas>=1.5"]
-full = ["neuprint-python>=0.10", "pandas>=1.5", "networkx>=3.0", "Pillow>=9.0"]
+neuprint = ["neuprint-python>=0.6", "pandas>=1.5"]
+full = ["neuprint-python>=0.6", "pandas>=1.5", "networkx>=3.0", "Pillow>=9.0"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0"]
 all = ["flynet[full,dev]"]
 

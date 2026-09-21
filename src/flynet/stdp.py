@@ -1,3 +1,11 @@
+"""Spike-Timing-Dependent Plasticity (STDP) learning rules.
+
+Provides standard and reward-modulated STDP implementations for
+spiking neural network training.
+"""
+
+from __future__ import annotations
+
 import numpy as np
 from math import exp
 
@@ -15,7 +23,19 @@ class STDPRule:
         w_min: float = -1.2,
         sigma: float = 0.1,
         scale: float = 1.0,
-    ):
+    ) -> None:
+        """Initialize the STDP rule.
+
+        Args:
+            a_plus (float): Maximum weight change for potentiation.
+            a_minus (float): Maximum weight change for depression.
+            tau_plus (float): Time constant for potentiation.
+            tau_minus (float): Time constant for depression.
+            w_max (float): Maximum allowed weight.
+            w_min (float): Minimum allowed weight.
+            sigma (float): Learning rate scale factor.
+            scale (float): Global scaling factor for weight updates.
+        """
         self.a_plus = a_plus
         self.a_minus = a_minus
         self.tau_plus = tau_plus
@@ -29,10 +49,10 @@ class STDPRule:
         """STDP curve value for a given time difference.
 
         Args:
-            dt: post_spike_time - pre_spike_time
+            dt (int): post_spike_time - pre_spike_time
 
         Returns:
-            Negative (depression) if dt > 0, positive (potentiation) if dt <= 0.
+            float: Negative (depression) if dt > 0, positive (potentiation) if dt <= 0.
         """
         if dt > 0:
             return -self.a_plus * exp(-dt / self.tau_plus)
@@ -43,11 +63,11 @@ class STDPRule:
         """Update a single weight based on STDP.
 
         Args:
-            w: current weight
-            dt: post_spike_time - pre_spike_time
+            w (float): current weight
+            dt (int): post_spike_time - pre_spike_time
 
         Returns:
-            Updated weight clipped to [w_min, w_max].
+            float: Updated weight clipped to [w_min, w_max].
         """
         delta = self.curve(dt)
         if delta < 0:
@@ -60,12 +80,12 @@ class STDPRule:
         """Convenience method for a single pre-post spike pair.
 
         Args:
-            w: current weight
-            pre_spike_time: time step of pre-synaptic spike
-            post_spike_time: time step of post-synaptic spike
+            w (float): current weight
+            pre_spike_time (int): time step of pre-synaptic spike
+            post_spike_time (int): time step of post-synaptic spike
 
         Returns:
-            Updated weight.
+            float: Updated weight.
         """
         dt = post_spike_time - pre_spike_time
         return self.update_weight(w, dt)
@@ -87,7 +107,22 @@ class RewardModulatedSTDP(STDPRule):
         a_reward: float = 1.0,
         eligibility_trace_decay: float = 0.95,
         n_synapses: int = 0,
-    ):
+    ) -> None:
+        """Initialize reward-modulated STDP.
+
+        Args:
+            a_plus (float): Maximum weight change for potentiation.
+            a_minus (float): Maximum weight change for depression.
+            tau_plus (float): Time constant for potentiation.
+            tau_minus (float): Time constant for depression.
+            w_max (float): Maximum allowed weight.
+            w_min (float): Minimum allowed weight.
+            sigma (float): Learning rate scale factor.
+            scale (float): Global scaling factor for weight updates.
+            a_reward (float): Reward modulation amplitude.
+            eligibility_trace_decay (float): Per-step decay factor for eligibility traces.
+            n_synapses (int): Number of synapses to track eligibility traces for.
+        """
         super().__init__(
             a_plus=a_plus,
             a_minus=a_minus,
@@ -106,8 +141,8 @@ class RewardModulatedSTDP(STDPRule):
         """Accumulate STDP trace into eligibility trace for a synapse.
 
         Args:
-            synapse_idx: index of the synapse
-            dt: post_spike_time - pre_spike_time
+            synapse_idx (int): index of the synapse
+            dt (int): post_spike_time - pre_spike_time
         """
         self.eligibility_traces *= self.eligibility_trace_decay
         self.eligibility_traces[synapse_idx] += self.curve(dt)
@@ -116,11 +151,11 @@ class RewardModulatedSTDP(STDPRule):
         """Apply reward-modulated weight updates and reset eligibility traces.
 
         Args:
-            reward: scalar reward signal
-            learning_rate: scale of reward-driven updates
+            reward (float): scalar reward signal
+            learning_rate (float): scale of reward-driven updates
 
         Returns:
-            Array of weight deltas for each synapse.
+            np.ndarray: Array of weight deltas for each synapse.
         """
         deltas = learning_rate * reward * self.a_reward * self.eligibility_traces
         self.eligibility_traces = np.zeros_like(self.eligibility_traces)

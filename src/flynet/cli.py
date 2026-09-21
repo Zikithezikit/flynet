@@ -7,7 +7,14 @@ import sys
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Entry point for the ``flynet`` CLI."""
+    """Entry point for the ``flynet`` CLI.
+
+    Parses command-line arguments and dispatches to the appropriate
+    subcommand handler.
+
+    Args:
+        argv (list[str] | None): Command-line arguments. Uses ``sys.argv`` if ``None``.
+    """
     p = argparse.ArgumentParser(
         prog="flynet",
         description="Spiking neural network library based on the Drosophila brain connectome.",
@@ -71,7 +78,11 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _list_datasets() -> None:
-    """Print available connectome datasets."""
+    """Print available connectome datasets.
+
+    Loads the dataset registry from ``ConnectomeLoader`` and prints each
+    dataset name and its description.
+    """
     from flynet.connectome import ConnectomeLoader
     datasets = ConnectomeLoader.DATASETS
     print(f"{'Dataset':<30} Description")
@@ -81,7 +92,15 @@ def _list_datasets() -> None:
 
 
 def _run_simulate(args: argparse.Namespace) -> None:
-    """Run a single simulation."""
+    """Run a single simulation.
+
+    Builds a spiking network from the selected connectome dataset,
+    settles it with a random odor input, and optionally saves a brain
+    circuit plot.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments for the ``simulate`` subcommand.
+    """
     import numpy as np
     from flynet.connectome import ConnectomeLoader
     from flynet.network import SpikingNetwork
@@ -120,7 +139,15 @@ def _run_simulate(args: argparse.Namespace) -> None:
 
 
 def _run_train(args: argparse.Namespace) -> None:
-    """Run the training loop."""
+    """Run the training loop.
+
+    Trains the spiking network using reward-gated Hebbian plasticity
+    across multiple food-search episodes. The fly navigates toward
+    an odor source and synapses are updated after successful foraging.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments for the ``train`` subcommand.
+    """
     import numpy as np
     from flynet.connectome import ConnectomeLoader
     from flynet.network import SpikingNetwork
@@ -153,7 +180,7 @@ def _run_train(args: argparse.Namespace) -> None:
     FOUND_RADIUS = 4.0
     ARENA = 100.0
 
-    def smell(pos):
+    def smell(pos: np.ndarray) -> float:
         d = float(np.linalg.norm(FOOD - pos))
         return 2.0 / (1.0 + 0.3 * d**2)
 

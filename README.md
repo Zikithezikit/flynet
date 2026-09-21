@@ -19,15 +19,73 @@ trace = net.settle(z_right=2.0, z_left=0.5)
 drv, _ = net.turn(rho_right=2.0, rho_left=0.5)
 ```
 
-## Install
+## Setup
+
+### 1. Create virtual environment and install
 
 ```bash
-pip install -e ".[dev]"          # core only (numpy, scipy, matplotlib)
-pip install -e ".[neuprint]"     # + neuPrint connectome access
-pip install -e ".[all]"          # everything including dev tools
+make venv            # create .venv/
+make install-dev     # install with pytest
+```
+
+Or manually:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
 ```
 
 Requires Python >= 3.10.
+
+### 2. Set up the neuPrint token (optional, for real connectome data)
+
+Get a free API token from https://neuprint.janelia.org (Account -> Token), then:
+
+```bash
+# Option A: .env file (persistent, recommended)
+echo "NEUPRINT_APPLICATION_CREDENTIALS=your-token-here" > .env
+
+# Option B: shell export (temporary)
+export NEUPRINT_APPLICATION_CREDENTIALS="your-token-here"
+```
+
+The `.env` file is loaded automatically by `make` and kept out of git via `.gitignore`.
+Without a token, all offline/synthetic features work exactly the same.
+
+### 3. Verify
+
+```bash
+make test-all        # unit tests + syntax check
+```
+
+## Makefile Targets
+
+Run `make help` to see all targets:
+
+```
+  install                Install in editable mode (core deps only)
+  install-dev            Install with dev extras (pytest, etc.)
+  install-all            Install with all extras (neuprint, dev, etc.)
+  venv                   Create the virtual environment
+  test                   Run unit tests
+  test-quiet             Run unit tests (quiet)
+  test-cov               Run tests with coverage report
+  lint                   Syntax-check all source files
+  typecheck              Run mypy on source (optional, not strict)
+  build                  Build wheel and sdist
+  clean                  Remove build artifacts
+  examples               Run all examples
+  example-basic          Run basic network example
+  example-connectome     Run connectome simulation (offline)
+  example-navigation     Run navigation task (offline, 5 episodes)
+  cli-list               List available connectome datasets
+  cli-simulate-offline   Simulate with synthetic brain (no token needed)
+  cli-simulate           Simulate with real connectome (needs token)
+  cli-train              Train with real connectome (needs token)
+  cli-train-offline      Train with synthetic brain (no token needed)
+  test-neuprint          Test real neuPrint mini brain fetch + simulate
+  test-all               Run tests + syntax check
+```
 
 ## Features
 
@@ -47,13 +105,7 @@ Requires Python >= 3.10.
 
 ## Quick Start
 
-### 1. Load a real connectome
-
-Get a free API token from https://neuprint.janelia.org (Account -> Token), then:
-
-```bash
-export NEUPRINT_APPLICATION_CREDENTIALS="your-token-here"
-```
+### Load a real connectome
 
 ```python
 from flynet.connectome import ConnectomeLoader
@@ -72,7 +124,7 @@ net = SpikingNetwork(ids, edges, motor_ids=motors if motors else None)
 
 All connectome data is cached to `~/.flynet/cache/` for offline use.
 
-### 2. Simulate the brain
+### Simulate the brain
 
 ```python
 # Inject sensory input and settle to a fixed point
@@ -92,7 +144,7 @@ net.postsynaptic(12781)  # who does this neuron talk to?
 net.get_weight(25185, 12781)  # synapse strength
 ```
 
-### 3. Train with reward-gated Hebbian plasticity
+### Train with reward-gated Hebbian plasticity
 
 ```python
 from flynet.learning import RewardHebbian
@@ -104,7 +156,7 @@ events = [(rho_right, rho_left, activity), ...]
 hebbian.update(net, events)
 ```
 
-### 4. Train with STDP
+### Train with STDP
 
 ```python
 from flynet import SpikingNeuron, SynapseList, STDPRule, LateralInhibition
@@ -118,46 +170,28 @@ neurons = [SpikingNeuron(threshold=5.0) for _ in range(10)]
 # ... simulate and apply STDP updates on spike pairs
 ```
 
-## CLI
-
-```bash
-# List available connectome datasets
-flynet list-datasets
-
-# Simulate with the real brain (needs token)
-NEUPRINT_APPLICATION_CREDENTIALS=... flynet simulate --plot
-
-# Simulate offline with synthetic brain
-flynet simulate --offline --plot
-
-# Train the navigation task
-NEUPRINT_APPLICATION_CREDENTIALS=... flynet train --episodes 10
-
-# Train offline
-flynet train --offline --episodes 5
-```
-
 ## Examples
 
 The `examples/` directory contains complete scripts:
 
-| Script | Description |
-|---|---|
-| `basic_network.py` | Create a small network, settle, calibrate, STDP demo |
-| `connectome_simulation.py` | Load real connectome and query wiring |
-| `navigation_task.py` | Fly navigates to food using real brain wiring + Hebbian learning |
-| `classification.py` | Unsupervised STDP pattern learning |
+| Script | Description | Token? |
+|---|---|---|
+| `basic_network.py` | Create a small network, settle, calibrate, STDP demo | No |
+| `connectome_simulation.py` | Load real connectome and query wiring | Optional |
+| `navigation_task.py` | Fly navigates to food using real brain wiring + Hebbian learning | Optional |
+| `classification.py` | Unsupervised STDP pattern learning | No |
 
 ```bash
-cd flynet
-.venv/bin/python examples/basic_network.py
-.venv/bin/python examples/navigation_task.py --episodes 5
+make example-basic           # or: .venv/bin/python examples/basic_network.py
+make example-connectome      # offline connectome demo
+make example-navigation      # offline navigation with learning
 ```
 
 ## Architecture
 
 ```
 flynet/
+  __init__.py          Package exports
   neurons.py           LIFNeuron, SpikingNeuron, NeuronModel ABC
   synapses.py          SynapseMatrix (CSR sparse), SynapseList (dense)
   encoding.py          rate_encode, poisson_encode, SpikeTrain
@@ -171,7 +205,7 @@ flynet/
   cli.py               flynet CLI entry point
 ```
 
-**Total: ~2,600 lines** of Python across 12 modules, with 40 tests.
+**Total: ~3,100 lines** of Python across 12 modules, with 40 tests.
 
 ## Results
 

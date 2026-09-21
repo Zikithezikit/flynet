@@ -19,21 +19,20 @@ def rate_encode(
     Spike probability at each timestep is proportional to the potential value.
     Higher potential = higher firing rate.
 
-    Parameters
-    ----------
-    potentials : np.ndarray
-        2D array of shape ``(n_neurons,)`` or ``(n_neurons, spatial_dim)``
-        containing analog membrane potential values.
-    t_steps : int
-        Number of simulation timesteps (spikes array has ``t_steps + 1`` columns).
-    scale : float
-        Multiplier applied to the normalised probability. Values > 1 increase
-        overall firing rate.
+    Args:
+        potentials (np.ndarray): 2D array of shape ``(n_neurons,)`` or
+            ``(n_neurons, spatial_dim)`` containing analog membrane
+            potential values.
+        t_steps (int): Number of simulation timesteps (spikes array has
+            ``t_steps + 1`` columns).
+        scale (float): Multiplier applied to the normalised probability.
+            Values > 1 increase overall firing rate.
 
-    Returns
-    -------
-    np.ndarray
-        Binary array of shape ``(n_total, t_steps + 1)`` where 1 = spike.
+    Returns:
+        np.ndarray: Binary array of shape ``(n_total, t_steps + 1)`` where 1 = spike.
+
+    Raises:
+        ValueError: If ``potentials`` is neither 1D nor 2D.
     """
     potentials = np.asarray(potentials, dtype=np.float64)
     if potentials.ndim == 1:
@@ -63,17 +62,12 @@ def poisson_encode(
 ) -> np.ndarray:
     """Generate Poisson spike trains from firing rates.
 
-    Parameters
-    ----------
-    rates : np.ndarray
-        Firing rates in Hz. Can be 1D ``(n_neurons,)`` or 2D.
-    t_steps : int
-        Number of simulation timesteps.
+    Args:
+        rates (np.ndarray): Firing rates in Hz. Can be 1D ``(n_neurons,)`` or 2D.
+        t_steps (int): Number of simulation timesteps.
 
-    Returns
-    -------
-    np.ndarray
-        Binary array of shape ``(n_total, t_steps + 1)``.
+    Returns:
+        np.ndarray: Binary array of shape ``(n_total, t_steps + 1)``.
     """
     rates = np.asarray(rates, dtype=np.float64)
     original_shape = rates.shape
@@ -91,13 +85,23 @@ def poisson_encode(
 class SpikeTrain:
     """Wrapper around a binary spike train array.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        Binary array of shape ``(n_neurons, t_steps + 1)``.
+    Attributes:
+        data: Underlying binary spike array of shape
+            ``(n_neurons, t_steps + 1)``.
+        n_neurons: Number of neurons.
+        n_timesteps: Number of timesteps (excluding the initial state
+            at t=0).
     """
 
     def __init__(self, data: np.ndarray) -> None:
+        """Initialise the SpikeTrain wrapper.
+
+        Args:
+            data (np.ndarray): Binary array of shape ``(n_neurons, t_steps + 1)``.
+
+        Raises:
+            ValueError: If ``data`` is not a 2D array.
+        """
         self._data = np.asarray(data, dtype=np.int8)
         if self._data.ndim != 2:
             raise ValueError(
@@ -106,7 +110,7 @@ class SpikeTrain:
 
     @property
     def data(self) -> np.ndarray:
-        """Underlying binary spike array."""
+        """The underlying binary spike array."""
         return self._data
 
     @property
@@ -120,17 +124,16 @@ class SpikeTrain:
         return self._data.shape[1] - 1
 
     def spike_times(self, neuron_idx: int) -> list[int]:
-        """Return the list of timesteps where neuron *neuron_idx* spiked.
+        """Return the list of timesteps where the given neuron spiked.
 
-        Parameters
-        ----------
-        neuron_idx : int
-            Index of the neuron to query.
+        Args:
+            neuron_idx (int): Index of the neuron to query.
 
-        Returns
-        -------
-        list[int]
-            Sorted list of spike times.
+        Returns:
+            list[int]: Sorted list of spike times.
+
+        Raises:
+            IndexError: If ``neuron_idx`` is out of range.
         """
         if neuron_idx < 0 or neuron_idx >= self.n_neurons:
             raise IndexError(
@@ -139,27 +142,24 @@ class SpikeTrain:
         return np.nonzero(self._data[neuron_idx])[0].tolist()
 
     def rates(self) -> np.ndarray:
-        """Average firing rate per neuron (spikes per timestep).
+        """Compute the average firing rate per neuron (spikes per timestep).
 
-        Returns
-        -------
-        np.ndarray
-            1D array of shape ``(n_neurons,)``.
+        Returns:
+            np.ndarray: 1D array of shape ``(n_neurons,)``.
         """
         return self._data.mean(axis=1)
 
     def is_active(self, t: int) -> np.ndarray:
-        """Boolean mask indicating which neurons fire at timestep *t*.
+        """Return a boolean mask indicating which neurons fire at timestep *t*.
 
-        Parameters
-        ----------
-        t : int
-            Timestep index (0 to ``n_timesteps``).
+        Args:
+            t (int): Timestep index (0 to ``n_timesteps``).
 
-        Returns
-        -------
-        np.ndarray
-            Boolean array of shape ``(n_neurons,)``.
+        Returns:
+            np.ndarray: Boolean array of shape ``(n_neurons,)``.
+
+        Raises:
+            IndexError: If ``t`` is out of range.
         """
         if t < 0 or t > self.n_timesteps:
             raise IndexError(

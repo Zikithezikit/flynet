@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -26,7 +26,18 @@ _FULL_MIN_WEIGHT = 50
 
 
 class ConnectomeLoader:
-    """Load and cache Drosophila connectome data from neuPrint."""
+    """Load and cache Drosophila connectome data from neuPrint.
+
+    Wraps neuPrint client queries with local CSV/JSON caching and provides
+    graceful degradation to a synthetic brain when the server is unreachable.
+
+    Attributes:
+        server (str): Base URL of the neuPrint server.
+        dataset (str): Dataset identifier (e.g. ``"male-cns:v1.0"``).
+        cache_dir (str): Local directory used for CSV/JSON cache files.
+        DATASETS (dict[str, str]): Mapping of dataset identifiers to
+            human-readable descriptions.
+    """
 
     DATASETS: dict[str, str] = {
         "hemibrain:v1.2.1":  "adult FEMALE central brain (the classic hemibrain)",
@@ -45,7 +56,15 @@ class ConnectomeLoader:
         server: str = "https://neuprint.janelia.org",
         dataset: str = "male-cns:v1.0",
         cache_dir: str | None = None,
-    ):
+    ) -> None:
+        """Initialize the ConnectomeLoader.
+
+        Args:
+            server (str): Base URL of the neuPrint server.
+            dataset (str): Dataset identifier to query.
+            cache_dir (str | None): Local directory for cache files. Uses
+                ``~/.flynet/cache`` when ``None``.
+        """
         self.server = server
         self.dataset = dataset
         self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
@@ -55,8 +74,12 @@ class ConnectomeLoader:
     # neuPrint client (lazy, cached)
     # ------------------------------------------------------------------
 
-    def _get_client(self):
-        """Return a cached neuPrint ``Client`` or ``None``."""
+    def _get_client(self) -> Any:
+        """Return a cached neuPrint ``Client`` or ``None``.
+
+        Returns:
+            Any: A neuPrint Client instance, or None if unavailable.
+        """
         if self._client is not None:
             return self._client
         token = os.environ.get("NEUPRINT_APPLICATION_CREDENTIALS", "").strip()
@@ -82,16 +105,42 @@ class ConnectomeLoader:
     # ------------------------------------------------------------------
 
     def _tag(self, neuron_type: str | None = None) -> str:
-        """Filesystem-safe suffix derived from the dataset name."""
+        """Filesystem-safe suffix derived from the dataset name.
+
+        Args:
+            neuron_type (str | None): Optional neuron cell type to include
+                in the tag.
+
+        Returns:
+            str: Filesystem-safe tag string.
+        """
         safe = self.dataset.replace(":", "_").replace("/", "_")
         if neuron_type:
             return f".{safe}.{neuron_type}"
         return f".{safe}"
 
     def _edge_csv(self, prefix: str, tag: str) -> str:
+        """Build the path for the edge CSV cache file.
+
+        Args:
+            prefix (str): Filename prefix (e.g. ``"mini_brain"``).
+            tag (str): Filesystem tag appended to the cache filename.
+
+        Returns:
+            str: Full path to the edge CSV file.
+        """
         return os.path.join(self.cache_dir, f"{prefix}_edges{tag}.csv")
 
     def _meta_json(self, prefix: str, tag: str) -> str:
+        """Build the path for the metadata JSON cache file.
+
+        Args:
+            prefix (str): Filename prefix (e.g. ``"mini_brain"``).
+            tag (str): Filesystem tag appended to the cache filename.
+
+        Returns:
+            str: Full path to the metadata JSON file.
+        """
         return os.path.join(self.cache_dir, f"{prefix}{tag}.json")
 
     # ------------------------------------------------------------------
@@ -105,10 +154,20 @@ class ConnectomeLoader:
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
         """Fetch a small brain slice centered on a cell type.
 
-        Returns ``(ids, edges, motor_bodies)`` where *ids* is the sorted list
-        of neuron body IDs, *edges* holds ``(pre_body, post_body, weight)``
-        triples, and *motor_bodies* contains candidate motor neuron IDs of the
-        requested cell type.
+        Args:
+            neuron_type (str): Neuron cell type to center the slice on.
+            max_edges (int): Maximum number of synaptic edges to return.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]]:
+                ``(ids, edges, motor_bodies)`` where *ids* is the
+                sorted list of neuron body IDs, *edges* holds
+                ``(pre_body, post_body, weight)`` triples, and *motor_bodies*
+                contains candidate motor neuron IDs of the requested cell type.
+
+        Raises:
+            RuntimeError: When the neuPrint client is unavailable.
+            ValueError: When no neurons of the requested type are found.
         """
         client = self._get_client()
         if client is None:
@@ -159,7 +218,19 @@ class ConnectomeLoader:
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
         """Fetch the whole fly connectome (strong backbone).
 
-        Returns ``(ids, edges, [])`` with an empty *motor_bodies* list.
+        Args:
+            min_weight (int): Minimum synaptic weight to include an edge.
+            edge_cap (int): Maximum number of edges to keep after sorting.
+            chunk_size (int): Number of neurons per neuPrint query batch.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]]:
+                ``(ids, edges, [])`` with an empty *motor_bodies*
+                list.
+
+        Raises:
+            RuntimeError: When the neuPrint client is unavailable.
+            ValueError: When the neuron fetch or synapse query returns empty.
         """
         client = self._get_client()
         if client is None:
@@ -223,7 +294,16 @@ class ConnectomeLoader:
         motor_bodies: List[int] | None = None,
         tag: str = "",
     ) -> None:
-        """Persist fetched data to *cache_dir*."""
+        """Persist fetched mini-brain data to *cache_dir*.
+
+        Args:
+            ids (list[int]): Sorted list of neuron body IDs.
+            edges (list[tuple[int, int, float]]): List of
+                ``(pre_body, post_body, weight)`` triples.
+            motor_bodies (list[int] | None): Candidate motor neuron IDs,
+                or ``None``.
+            tag (str): Filesystem tag appended to the cache filename.
+        """
         os.makedirs(self.cache_dir, exist_ok=True)
         csv_path = self._edge_csv("mini_brain", tag)
         json_path = self._meta_json("mini_brain", tag)
@@ -244,7 +324,14 @@ class ConnectomeLoader:
         edges: List[Tuple[int, int, float]],
         tag: str = "",
     ) -> None:
-        """Persist a full-connectome fetch to *cache_dir*."""
+        """Persist a full-connectome fetch to *cache_dir*.
+
+        Args:
+            ids (list[int]): Sorted list of neuron body IDs.
+            edges (list[tuple[int, int, float]]): List of
+                ``(pre_body, post_body, weight)`` triples.
+            tag (str): Filesystem tag appended to the cache filename.
+        """
         os.makedirs(self.cache_dir, exist_ok=True)
         csv_path = self._edge_csv("full_connectome", tag)
         json_path = self._meta_json("full_connectome", tag)
@@ -261,8 +348,13 @@ class ConnectomeLoader:
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]] | None:
         """Load a previously cached mini brain.
 
-        Returns ``(ids, edges, motor_bodies)`` or ``None`` when the cache is
-        incomplete.
+        Args:
+            tag (str): Filesystem tag appended to the cache filename.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]] | None:
+                ``(ids, edges, motor_bodies)`` or ``None`` when the
+                cache is incomplete or missing.
         """
         import csv
 
@@ -287,7 +379,13 @@ class ConnectomeLoader:
     ) -> Tuple[List[int], List[Tuple[int, int, float]]] | None:
         """Load a previously cached full connectome.
 
-        Returns ``(ids, edges)`` or ``None`` when the cache is incomplete.
+        Args:
+            tag (str): Filesystem tag appended to the cache filename.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]]] | None:
+                ``(ids, edges)`` or ``None`` when the cache is
+                incomplete or missing.
         """
         import csv
 
@@ -306,7 +404,7 @@ class ConnectomeLoader:
         return list(meta["ids"]), edges
 
     # ------------------------------------------------------------------
-    # convenience wrappers (try cache → neuPrint → synthetic)
+    # convenience wrappers (try cache -> neuPrint -> synthetic)
     # ------------------------------------------------------------------
 
     def load_or_fetch_mini(
@@ -314,7 +412,17 @@ class ConnectomeLoader:
         neuron_type: str,
         max_edges: int = 40,
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
-        """Try cache first, then neuPrint, then synthetic fallback."""
+        """Try cache first, then neuPrint, then synthetic fallback.
+
+        Args:
+            neuron_type (str): Neuron cell type to center the slice on.
+            max_edges (int): Maximum number of synaptic edges to return.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]]:
+                ``(ids, edges, motor_bodies)`` with the same
+                structure as :meth:`fetch_mini_brain`.
+        """
         tag = self._tag(neuron_type)
         cached = self.load_cache(tag)
         if cached is not None:
@@ -331,7 +439,17 @@ class ConnectomeLoader:
         min_weight: int = 50,
         edge_cap: int = 3_000_000,
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
-        """Try cache first, then neuPrint."""
+        """Try cache first, then neuPrint.
+
+        Args:
+            min_weight (int): Minimum synaptic weight to include an edge.
+            edge_cap (int): Maximum number of edges to keep after sorting.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]]:
+                ``(ids, edges, [])`` with an empty motor bodies
+                list.
+        """
         tag = self._tag()
         cached = self.load_full_cache(tag)
         if cached is not None:
@@ -353,11 +471,21 @@ class ConnectomeLoader:
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
         """Build a synthetic test brain without network access.
 
-        Returns ``(ids, edges, motor_bodies)`` with the same structure as the
-        real data: sensor neurons (``ids[0]``, ``ids[1]``), hub neurons
-        (``ids[2:8]``), and motor neurons (``ids[-2:]``).  Strong edges connect
-        sensors → hubs → motors and motors → sensors (recurrent); random noise
-        edges fill up to *max_edges*.
+        Creates a small directed graph with sensor neurons, hub neurons, and
+        motor neurons connected by strong structured edges and random noise
+        edges.
+
+        Args:
+            n_neurons (int): Total number of neurons in the synthetic brain.
+            max_edges (int): Maximum number of edges to include.
+            seed (int): Random seed for reproducibility.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int, float]], list[int]]:
+                ``(ids, edges, motor_bodies)`` where *ids* is the
+                sorted list of neuron body IDs, *edges* holds
+                ``(pre_body, post_body, weight)`` triples, and *motor_bodies*
+                contains the two motor neuron IDs.
         """
         rng = np.random.default_rng(seed)
         ids = [_SYNTH_ID_BASE + i for i in range(n_neurons)]
@@ -383,7 +511,7 @@ class ConnectomeLoader:
             rows.append(a)
             cols.append(b)
             wts.append(w)
-        edges: list = list(zip(rows, cols, wts))
+        edges = list(zip(rows, cols, wts))
         while len(edges) < max_edges:
             rows += [
                 int(rng.integers(2, n_neurons)) + _SYNTH_ID_BASE
