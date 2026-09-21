@@ -173,6 +173,28 @@ flynet/
 
 **Total: ~2,600 lines** of Python across 12 modules, with 40 tests.
 
+## Results
+
+### Brain Circuit (DNge104 Mini Brain)
+
+![Brain Circuit](docs/images/real_brain_circuit.png)
+
+Real connectome wiring of the DNge104 descending neuron and its partners.
+Red = sensors, Blue = motors, Grey = other neurons. Edges are proportional to synapse weight.
+
+### Navigation: Before vs After Learning
+
+![Trajectory](docs/images/real_trajectory.png)
+
+The fly starts at (15, 20) and navigates toward food at (80, 80) by sensing a smell gradient.
+Left: before learning (77 steps). Right: after 5 episodes of Hebbian training (50 steps).
+
+### Learning Curve
+
+![Learning Curve](docs/images/real_learning_curve.png)
+
+Steps to reach food decrease as reward-gated Hebbian plasticity strengthens co-active synapses.
+
 ## Tested With
 
 | Connectome | Neurons | Edges | Result |
