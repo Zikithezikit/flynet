@@ -1,0 +1,45 @@
+# Python
+src/flynet/__pycache__/
+tests/__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# mypy
+.mypy_cache/
+
+# Project output
+output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.env
+.env
