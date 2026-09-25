@@ -1,7 +1,7 @@
 """flynet - Spiking neural network library based on the Drosophila brain connectome.
 
 Build, simulate, and train spiking neural networks using real fruit-fly
-connectome wiring from neuPrint/FlyWire, or define your own brain structures
+connectome wiring fetched from neuPrint, or define your own brain structures
 programmatically.
 """
 
@@ -13,9 +13,16 @@ from flynet.encoding import rate_encode, SpikeTrain
 from flynet.receptive_fields import ReceptiveField
 from flynet.stdp import STDPRule
 from flynet.network import SpikingNetwork
-from flynet.connectome import ConnectomeLoader
+from flynet.connectome import ConnectomeLoader, ConnectomeUnavailableError
 from flynet.learning import RewardHebbian, STDPTrainer, TrainingLogger
 from flynet.inhibition import LateralInhibition
+
+# Gradient training (optional – requires jax)
+try:
+    from flynet.jax_network import JaxNetwork
+    from flynet.jax_trainer import GradientTrainer, ExpertTeacher
+except ImportError:
+    pass
 from flynet.visualize import (
     plot_brain_circuit,
     plot_trajectory,
@@ -38,6 +45,7 @@ __all__ = [
     "STDPRule",
     "SpikingNetwork",
     "ConnectomeLoader",
+    "ConnectomeUnavailableError",
     "RewardHebbian",
     "STDPTrainer",
     "TrainingLogger",

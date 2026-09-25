@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
+__all__ = ["LateralInhibition", "ThresholdManager"]
+
 
 class LateralInhibition:
     """Lateral inhibition module supporting winner-takes-all and soft modes."""
@@ -122,6 +124,10 @@ class ThresholdManager:
 
         Returns:
             float: Current threshold value.
+
+        Raises:
+            ValueError: If no fixed threshold is set and ``spike_train``
+                is ``None``.
         """
         if self._fixed_threshold is not None:
             return self._fixed_threshold

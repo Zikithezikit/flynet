@@ -5,7 +5,8 @@ import numpy as np
 from flynet import SpikingNetwork, LIFNeuron, rate_encode, STDPRule
 
 
-def main():
+def main() -> None:
+    """Build a small network and demo settling, LIF neurons, and STDP."""
     # -- 1. Build a small network from edges --------------------------------
     ids = [100, 101, 102, 103, 104]
     edges = [
@@ -50,10 +51,10 @@ def main():
     stdp = STDPRule()
     w = 0.5
     print(f"Initial weight: {w}")
-    w = stdp.update_weight(w, dt=-3)  # pre before post -> potentiate
-    print(f"After potentiation (dt=-3): {w:.4f}")
-    w = stdp.update_weight(w, dt=5)   # post before pre -> depress
-    print(f"After depression (dt=+5): {w:.4f}")
+    w = stdp.update_weight(w, dt=3)  # pre before post -> potentiate
+    print(f"After potentiation (dt=+3): {w:.4f}")
+    w = stdp.update_weight(w, dt=-5)  # post before pre -> depress
+    print(f"After depression (dt=-5): {w:.4f}")
 
 
 if __name__ == "__main__":

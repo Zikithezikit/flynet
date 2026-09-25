@@ -6,11 +6,18 @@ and STDP training (from Spiking-Neural-Network/training/learning.py).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 from flynet.neurons import SpikingNeuron
 from flynet.stdp import STDPRule
 from flynet.synapses import SynapseList
+
+if TYPE_CHECKING:
+    from flynet.network import SpikingNetwork
+
+__all__ = ["RewardHebbian", "STDPTrainer", "TrainingLogger"]
 
 
 class RewardHebbian:
@@ -30,7 +37,7 @@ class RewardHebbian:
         self.eta = eta
         self.reward_bonus = reward_bonus
 
-    def update(self, network: "SpikingNetwork", events: list, W: np.ndarray | None = None) -> None:
+    def update(self, network: "SpikingNetwork", events: list, W: Any = None) -> None:
         """Apply Hebbian updates to the network weights.
 
         Args:
@@ -129,36 +136,39 @@ class STDPTrainer:
         if threshold is None:
             threshold = self._neuron_defaults["threshold"]
 
-        pot_arrays = [[] for _ in range(n)]
+        pot_arrays: list[list[Any]] = [[] for _ in range(n)]
         spike_record = np.zeros((n, T + 1), dtype=np.int8)
-        active_pot = np.zeros(n)
         fired_flag = False
         winner_idx = None
 
         for t in range(T + 1):
+            pre_pot = np.zeros(n)
+            spiked = np.zeros(n, dtype=bool)
             for j in range(n):
-                if neurons[j]._refrac_counter <= 0:
-                    current_input = float(np.dot(synapses.get_row(j), spike_train[:, t]))
-                    neurons[j].step(current_input, dt=1.0)
-                active_pot[j] = neurons[j].get_potential()
+                current_input = float(np.dot(synapses.get_row(j), spike_train[:, t]))
+                pre_pot[j] = neurons[j].get_potential()
+                # step() integrates, detects the spike, resets, and counts
+                # down the refractory period itself.
+                spiked[j] = neurons[j].step(current_input, dt=1.0)
                 pot_arrays[j].append(neurons[j].get_potential())
 
-            if not fired_flag:
-                high_pot = active_pot.max()
-                if high_pot > threshold:
-                    fired_flag = True
-                    winner_idx = int(np.argmax(active_pot))
-                    for s in range(n):
-                        if s != winner_idx:
-                            neurons[s].inhibit()
+            if not fired_flag and spiked.any():
+                fired_flag = True
+                candidates = np.flatnonzero(spiked)
+                # Rank simultaneous spikers by the drive that crossed threshold.
+                peaks = [
+                    pre_pot[c]
+                    + float(np.dot(synapses.get_row(int(c)), spike_train[:, t]))
+                    for c in candidates
+                ]
+                winner_idx = int(candidates[int(np.argmax(peaks))])
+                for s in range(n):
+                    if s != winner_idx:
+                        neurons[s].inhibit()
 
-            for j in range(n):
-                pot = neurons[j].get_potential()
-                if pot >= neurons[j].threshold:
-                    spike_record[j, t] = 1
-                    neurons[j].reset()
-                    neurons[j]._refrac_counter = neurons[j].refrac_time
-                    self._apply_stdp(j, t, spike_train, synapses, T)
+            for sj in np.flatnonzero(spiked):
+                spike_record[sj, t] = 1
+                self._apply_stdp(int(sj), t, spike_train, synapses, T)
 
         for p in range(m):
             if spike_train[p].sum() == 0 and winner_idx is not None:
@@ -202,18 +212,22 @@ class STDPTrainer:
         t_fore = 20
 
         for h in range(self.n_inputs):
+            # Input spikes BEFORE the post-synaptic spike (t1 < 0):
+            # dt = t_post - t_pre = -t1 > 0 -> potentiation.
             for t1 in range(-2, t_back - 1, -1):
                 t_check = spike_time + t1
                 if 0 <= t_check < T + 1 and spike_train[h, t_check] == 1:
-                    dt = t1
+                    dt = -t1
                     old_w = synapses.get_row(neuron_idx)[h]
                     new_w = self.stdp_rule.update_weight(old_w, dt)
                     synapses.set_weight(neuron_idx, h, new_w)
 
+            # Input spikes AFTER the post-synaptic spike (t1 > 0):
+            # dt = t_post - t_pre = -t1 < 0 -> depression.
             for t1 in range(2, t_fore + 1, 1):
                 t_check = spike_time + t1
                 if 0 <= t_check < T + 1 and spike_train[h, t_check] == 1:
-                    dt = t1
+                    dt = -t1
                     old_w = synapses.get_row(neuron_idx)[h]
                     new_w = self.stdp_rule.update_weight(old_w, dt)
                     synapses.set_weight(neuron_idx, h, new_w)

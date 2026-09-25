@@ -6,7 +6,7 @@ in :func:`plot_brain_circuit` and Pillow for animated GIF creation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -27,7 +27,17 @@ except ImportError:
 try:
     from PIL import Image as PILImage
 except ImportError:
-    PILImage = None
+    PILImage = None  # type: ignore[assignment]
+
+__all__ = [
+    "plot_brain_circuit",
+    "plot_trajectory",
+    "plot_learning_curve",
+    "plot_plasticity_heatmap",
+    "plot_spike_raster",
+    "plot_weight_matrix",
+    "create_gif",
+]
 
 
 def plot_brain_circuit(
@@ -258,15 +268,15 @@ def plot_learning_curve(
         ax.set_title(title)
         return ax
 
-    episodes = np.array(episodes, dtype=np.float64)
-    steps = np.array(steps, dtype=np.float64)
+    ep_arr = np.array(episodes, dtype=np.float64)
+    st_arr = np.array(steps, dtype=np.float64)
 
-    ax.plot(episodes, steps, "b-", alpha=0.3, label="Raw")
+    ax.plot(ep_arr, st_arr, "b-", alpha=0.3, label="Raw")
 
-    if len(steps) >= window:
+    if len(st_arr) >= window:
         kernel = np.ones(window) / window
-        smoothed = np.convolve(steps, kernel, mode="valid")
-        sm_x = episodes[window - 1:]
+        smoothed = np.convolve(st_arr, kernel, mode="valid")
+        sm_x = ep_arr[window - 1:]
         ax.plot(sm_x, smoothed, "b-", linewidth=2, label=f"Smoothed ({window})")
 
     ax.set_xlabel("Episode")
@@ -412,6 +422,9 @@ def create_gif(
         frames (list[Figure | np.ndarray]): List of Figure objects or 2D/3D numpy arrays (images).
         path (str): Output file path (should end in ``.gif``).
         fps (int): Frames per second.
+
+    Raises:
+        ImportError: If Pillow is not installed.
     """
     if PILImage is None:
         raise ImportError("Pillow is required for GIF creation: pip install Pillow")
@@ -424,7 +437,7 @@ def create_gif(
             buf = io.BytesIO()
             frame.savefig(buf, format="png", dpi=100, bbox_inches="tight")
             buf.seek(0)
-            img = PILImage.open(buf)
+            img: Any = PILImage.open(buf)
         else:
             arr = np.asarray(frame)
             if arr.ndim == 2:

@@ -9,9 +9,11 @@ from __future__ import annotations
 import numpy as np
 
 try:
-    from scipy.signal import fft_convolve as _fft_convolve  # type: ignore[import-untyped]
+    from scipy.signal import fft_convolve as _fft_convolve
 except ImportError:
     _fft_convolve = None
+
+__all__ = ["ReceptiveField", "manhattan_rf", "apply_rf"]
 
 
 class ReceptiveField:
@@ -54,6 +56,13 @@ class ReceptiveField:
     # ------------------------------------------------------------------
 
     def _build_kernel(self) -> np.ndarray:
+        """Build the centre-surround convolution kernel.
+
+        Returns:
+            np.ndarray: Zero-mean kernel of shape ``(size, size)``;
+            positive (on-centre) or negative (off-centre) depending on
+            :attr:`on_center`.
+        """
         half = self._size // 2
         ax = np.arange(-half, half + 1, dtype=np.float64)
         xx, yy = np.meshgrid(ax, ax, indexing="ij")
@@ -75,7 +84,11 @@ class ReceptiveField:
 
     @property
     def kernel(self) -> np.ndarray:
-        """The 2D kernel array."""
+        """The 2D kernel array.
+
+        Returns:
+            np.ndarray: Kernel of shape ``(size, size)``.
+        """
         return self._kernel
 
     def apply(self, image: np.ndarray) -> np.ndarray:

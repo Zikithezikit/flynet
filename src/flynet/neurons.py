@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
+__all__ = ["NeuronModel", "LIFNeuron", "SpikingNeuron"]
+
 
 class NeuronModel(ABC):
     """Abstract base class for all neuron models.

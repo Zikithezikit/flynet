@@ -1,4 +1,4 @@
-.PHONY: help install install-all install-dev test lint typecheck build clean \
+.PHONY: help install install-all install-dev test lint docstyle typecheck check build clean \
        examples example-basic example-connectome example-navigation \
        cli-list cli-simulate cli-simulate-offline cli-train cli-train-offline \
        test-neuprint test-all
@@ -50,8 +50,13 @@ lint: ## Syntax-check all source files
 		$(PYTHON) -m py_compile "$$f" && echo "OK  $$f" || echo "FAIL $$f"; \
 	done
 
-typecheck: ## Run mypy on source (optional, not strict)
-	$(PYTHON) -m mypy $(SRC) --ignore-missing-imports || true
+docstyle: ## Check Google-style docstrings (pydocstyle)
+	$(PYTHON) -m pydocstyle --convention=google $(SRC) examples
+
+typecheck: ## Run mypy on source (strict config in pyproject.toml)
+	$(PYTHON) -m mypy $(SRC)
+
+check: lint docstyle typecheck test-quiet ## Run all gates: lint, docstyle, typecheck, tests
 
 # ── Build ──────────────────────────────────────────────────────────────────
 

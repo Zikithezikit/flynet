@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 from math import exp
 
+__all__ = ["STDPRule", "RewardModulatedSTDP"]
+
 
 class STDPRule:
     """Spike-Timing-Dependent Plasticity learning rule."""
@@ -48,19 +50,27 @@ class STDPRule:
     def curve(self, dt: int) -> float:
         """STDP curve value for a given time difference.
 
+        Uses the standard convention ``dt = post_spike_time - pre_spike_time``:
+        the pre-synaptic neuron fires first (dt > 0) and the synapse is
+        potentiated; the post-synaptic neuron fires first (dt < 0) and the
+        synapse is depressed.
+
         Args:
             dt (int): post_spike_time - pre_spike_time
 
         Returns:
-            float: Negative (depression) if dt > 0, positive (potentiation) if dt <= 0.
+            float: Positive (potentiation) if dt > 0, negative (depression) if dt <= 0.
         """
         if dt > 0:
-            return -self.a_plus * exp(-dt / self.tau_plus)
+            return self.a_plus * exp(-dt / self.tau_plus)
         else:
-            return self.a_minus * exp(dt / self.tau_minus)
+            return -self.a_minus * exp(dt / self.tau_minus)
 
     def update_weight(self, w: float, dt: int) -> float:
         """Update a single weight based on STDP.
+
+        Multiplicative weight-dependent update: potentiation vanishes at
+        ``w_max`` and depression vanishes at ``w_min``.
 
         Args:
             w (float): current weight
@@ -71,7 +81,7 @@ class STDPRule:
         """
         delta = self.curve(dt)
         if delta < 0:
-            w_new = w + self.sigma * delta * (w - abs(self.w_min)) * self.scale
+            w_new = w + self.sigma * delta * (w - self.w_min) * self.scale
         else:
             w_new = w + self.sigma * delta * (self.w_max - w) * self.scale
         return float(np.clip(w_new, self.w_min, self.w_max))
@@ -140,12 +150,21 @@ class RewardModulatedSTDP(STDPRule):
     def update_eligibility(self, synapse_idx: int, dt: int) -> None:
         """Accumulate STDP trace into eligibility trace for a synapse.
 
+        Does not decay existing traces.  Call :meth:`decay_eligibility`
+        exactly once per simulation timestep to age the traces.
+
         Args:
             synapse_idx (int): index of the synapse
             dt (int): post_spike_time - pre_spike_time
         """
-        self.eligibility_traces *= self.eligibility_trace_decay
         self.eligibility_traces[synapse_idx] += self.curve(dt)
+
+    def decay_eligibility(self) -> None:
+        """Age all eligibility traces by one timestep.
+
+        Call this once per simulation timestep (not once per spike event).
+        """
+        self.eligibility_traces *= self.eligibility_trace_decay
 
     def apply_reward(self, reward: float, learning_rate: float = 0.6) -> np.ndarray:
         """Apply reward-modulated weight updates and reset eligibility traces.

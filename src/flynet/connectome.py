@@ -1,9 +1,13 @@
 """Load Drosophila brain connectome data from neuPrint.
 
 Provides :class:`ConnectomeLoader` which wraps neuPrint queries with local
-CSV/JSON caching, graceful degradation to a synthetic brain when the server
-is unreachable, and a chunked full-connectome fetch for the ~176k-neuron
+CSV/JSON caching and a chunked full-connectome fetch for the ~176k-neuron
 male CNS dataset.
+
+Real connectome data is mandatory: when a live fetch fails, the loader
+raises :class:`ConnectomeUnavailableError` instead of quietly substituting
+synthetic data.  Synthetic test data is available only through the
+explicit :meth:`ConnectomeLoader.synthetic_brain` helper (CLI: ``--offline``).
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
+__all__ = ["ConnectomeLoader", "ConnectomeUnavailableError"]
+
 _DEFAULT_CACHE_DIR = os.path.join(str(Path.home()), ".flynet", "cache")
 _SYNTH_N = 41
 _SYNTH_ID_BASE = 1000
@@ -25,16 +31,31 @@ _FULL_CHUNK = 20000
 _FULL_MIN_WEIGHT = 50
 
 
+class ConnectomeUnavailableError(RuntimeError):
+    """Raised when real neuPrint connectome data cannot be obtained.
+
+    flynet never silently substitutes synthetic data for the real brain.
+    For synthetic test data use :meth:`ConnectomeLoader.synthetic_brain`
+    explicitly (CLI: the ``--offline`` flag).
+
+    Args:
+        message (str): Human-readable explanation including how to fix it.
+    """
+
+
 class ConnectomeLoader:
     """Load and cache Drosophila connectome data from neuPrint.
 
-    Wraps neuPrint client queries with local CSV/JSON caching and provides
-    graceful degradation to a synthetic brain when the server is unreachable.
+    Wraps neuPrint client queries with local CSV/JSON caching.  Cache
+    misses are fetched live from neuPrint; fetch failures raise
+    :class:`ConnectomeUnavailableError` (never silent synthetic data).
 
     Attributes:
         server (str): Base URL of the neuPrint server.
         dataset (str): Dataset identifier (e.g. ``"male-cns:v1.0"``).
         cache_dir (str): Local directory used for CSV/JSON cache files.
+        last_source (str): Provenance of the most recent load --
+            ``"cache"``, ``"neuprint"``, ``"synthetic"``, or ``""``.
         DATASETS (dict[str, str]): Mapping of dataset identifiers to
             human-readable descriptions.
     """
@@ -69,6 +90,7 @@ class ConnectomeLoader:
         self.dataset = dataset
         self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
         self._client = None
+        self.last_source: str = ""
 
     # ------------------------------------------------------------------
     # neuPrint client (lazy, cached)
@@ -412,7 +434,11 @@ class ConnectomeLoader:
         neuron_type: str,
         max_edges: int = 40,
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
-        """Try cache first, then neuPrint, then synthetic fallback.
+        """Load the cached mini brain, fetching it live when absent.
+
+        Real connectome data only: a failed fetch raises
+        :class:`ConnectomeUnavailableError` rather than silently
+        returning a synthetic brain.
 
         Args:
             neuron_type (str): Neuron cell type to center the slice on.
@@ -422,24 +448,75 @@ class ConnectomeLoader:
             tuple[list[int], list[tuple[int, int, float]], list[int]]:
                 ``(ids, edges, motor_bodies)`` with the same
                 structure as :meth:`fetch_mini_brain`.
+
+        Raises:
+            ConnectomeUnavailableError: When the brain is not cached and
+                the live neuPrint fetch fails (missing token, missing
+                ``neuprint`` extra, network failure, unknown cell type).
         """
         tag = self._tag(neuron_type)
         cached = self.load_cache(tag)
         if cached is not None:
+            self.last_source = "cache"
             return cached
         try:
             ids, edges, motors = self.fetch_mini_brain(neuron_type, max_edges)
-        except Exception:  # noqa: BLE001
-            return self.synthetic_brain(max_edges=max_edges)
+        except Exception as exc:  # noqa: BLE001
+            raise ConnectomeUnavailableError(
+                f"could not load the real neuPrint brain for "
+                f"{neuron_type!r} (dataset {self.dataset!r}): {exc}\n"
+                "flynet requires real connectome data and will not "
+                "silently substitute synthetic data. Fix: set "
+                "NEUPRINT_APPLICATION_CREDENTIALS (see .env), install the "
+                "'neuprint' extra, or explicitly request synthetic test "
+                "data via --offline (CLI) or "
+                "ConnectomeLoader.synthetic_brain()."
+            ) from exc
         self.save_cache(ids, edges, motors, tag)
+        self.last_source = "neuprint"
         return ids, edges, motors
+
+    def load_cached_mini(
+        self,
+        neuron_type: str,
+    ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]] | None:
+        """Return the cached mini brain, never touching the network.
+
+        Args:
+            neuron_type (str): Neuron cell type the cache was built for.
+
+        Returns:
+            tuple | None: ``(ids, edges, motor_bodies)`` from the cache,
+            or ``None`` when nothing is cached.  Never synthetic data.
+        """
+        result = self.load_cache(self._tag(neuron_type))
+        if result is not None:
+            self.last_source = "cache"
+        return result
+
+    def load_cached_full(
+        self,
+    ) -> Tuple[List[int], List[Tuple[int, int, float]]] | None:
+        """Return the cached full connectome, never touching the network.
+
+        Returns:
+            tuple | None: ``(ids, edges)`` from the cache, or ``None``
+            when nothing is cached.  Never synthetic data.
+        """
+        result = self.load_full_cache(self._tag())
+        if result is not None:
+            self.last_source = "cache"
+        return result
 
     def load_or_fetch_full(
         self,
         min_weight: int = 50,
         edge_cap: int = 3_000_000,
     ) -> Tuple[List[int], List[Tuple[int, int, float]], List[int]]:
-        """Try cache first, then neuPrint.
+        """Load the cached full connectome, fetching it live when absent.
+
+        Real connectome data only: a failed fetch raises
+        :class:`ConnectomeUnavailableError`.
 
         Args:
             min_weight (int): Minimum synaptic weight to include an edge.
@@ -449,14 +526,32 @@ class ConnectomeLoader:
             tuple[list[int], list[tuple[int, int, float]], list[int]]:
                 ``(ids, edges, [])`` with an empty motor bodies
                 list.
+
+        Raises:
+            ConnectomeUnavailableError: When the connectome is not
+                cached and the live neuPrint fetch fails.
         """
         tag = self._tag()
         cached = self.load_full_cache(tag)
         if cached is not None:
+            self.last_source = "cache"
             ids, edges = cached
             return ids, edges, []
-        ids, edges, _ = self.fetch_full_connectome(min_weight, edge_cap)
+        try:
+            ids, edges, _ = self.fetch_full_connectome(min_weight, edge_cap)
+        except Exception as exc:  # noqa: BLE001
+            raise ConnectomeUnavailableError(
+                f"could not load the real full connectome "
+                f"(dataset {self.dataset!r}): {exc}\n"
+                "flynet requires real connectome data and will not "
+                "silently substitute synthetic data. Fix: set "
+                "NEUPRINT_APPLICATION_CREDENTIALS (see .env) and install "
+                "the 'neuprint' extra, or request synthetic test data "
+                "explicitly via --offline (CLI) or "
+                "ConnectomeLoader.synthetic_brain()."
+            ) from exc
         self.save_full_cache(ids, edges, tag)
+        self.last_source = "neuprint"
         return ids, edges, []
 
     # ------------------------------------------------------------------

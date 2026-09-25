@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 from scipy import sparse
 
+__all__ = ["SynapseMatrix", "SynapseList"]
+
 
 class SynapseMatrix:
     """Sparse synaptic weight matrix backed by scipy CSR.

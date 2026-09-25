@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
+__all__ = ["rate_encode", "poisson_encode", "SpikeTrain"]
+
 
 def rate_encode(
     potentials: np.ndarray,
@@ -110,17 +112,30 @@ class SpikeTrain:
 
     @property
     def data(self) -> np.ndarray:
-        """The underlying binary spike array."""
+        """The underlying binary spike array.
+
+        Returns:
+            np.ndarray: Binary spike array of shape
+            ``(n_neurons, n_timesteps + 1)``.
+        """
         return self._data
 
     @property
     def n_neurons(self) -> int:
-        """Number of neurons."""
+        """Number of neurons.
+
+        Returns:
+            int: Row count of the spike array.
+        """
         return self._data.shape[0]
 
     @property
     def n_timesteps(self) -> int:
-        """Number of timesteps (excluding the initial state at t=0)."""
+        """Number of timesteps (excluding the initial state at t=0).
+
+        Returns:
+            int: Column count minus the initial state column.
+        """
         return self._data.shape[1] - 1
 
     def spike_times(self, neuron_idx: int) -> list[int]:

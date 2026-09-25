@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import copy
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 from scipy import sparse as sp
+
+__all__ = ["SpikingNetwork", "SETTLE", "CAL_PROBE_OFF", "CAL_PROBE_ON"]
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -48,10 +50,7 @@ class SpikingNetwork:
         self.W, self.W_raw = self._build_weight_matrix(edges)
 
         # COO views used by presynaptic / postsynaptic queries
-        self._coo = self.W.tocoo()
-        self.rows = self._coo.row
-        self.cols = self._coo.col
-        self.wts = self._coo.data
+        self._refresh_wiring_views()
         self._raw_coo = self.W_raw.tocoo()
 
         self.motors: list[int] = motor_ids if motor_ids is not None else self._pick_motors()
@@ -106,6 +105,19 @@ class SpikingNetwork:
         W_raw.eliminate_zeros()
 
         return W, W_raw
+
+    def _refresh_wiring_views(self) -> None:
+        """Rebuild the COO views cached from ``self.W``.
+
+        Called at construction and after any mutation of ``self.W``
+        (e.g. :meth:`set_weight`) so that :meth:`get_weight`,
+        :meth:`presynaptic`, and :meth:`postsynaptic` all reflect the
+        current dynamics matrix rather than a stale snapshot.
+        """
+        self._coo = self.W.tocoo()
+        self.rows = self._coo.row
+        self.cols = self._coo.col
+        self.wts = self._coo.data
 
     # ------------------------------------------------------------------
     # Role auto-detection
@@ -207,6 +219,7 @@ class SpikingNetwork:
         z[self._ix[sL]] = z_left
         z[self._ix[sR]] = z_right
 
+        act_fn: Any
         if activation == "tanh":
             act_fn = np.tanh
         elif activation == "relu":
@@ -286,6 +299,7 @@ class SpikingNetwork:
         rho_right: float,
         rho_left: float,
         W: sp.csr_matrix | None = None,
+        Minv: np.ndarray | None = None,
     ) -> tuple[float, list[np.ndarray]]:
         """Compute steering command for a smell pair.
 
@@ -296,13 +310,18 @@ class SpikingNetwork:
             rho_right (float): Desired smell reading on the right antenna.
             rho_left (float): Desired smell reading on the left antenna.
             W (sp.csr_matrix | None): Weight matrix to use (default: ``self.W``).
+            Minv (np.ndarray | None): Pre-computed inverse calibration matrix.
+                If ``None``, calibration is computed fresh.  Pass a cached
+                ``Minv`` to keep steering consistent across weight updates
+                during training.
 
         Returns:
-            tuple[float, list[np.ndarray]]: ``(drv, trace)`` – the motor difference and the full
+            tuple[float, list[np.ndarray]]: ``(drv, trace)`` -- the motor difference and the full
             settling trace.
         """
         W = self.W if W is None else W
-        _, Minv = self.calibrate(W=W)
+        if Minv is None:
+            _, Minv = self.calibrate(W=W)
         z = Minv @ np.array([rho_right, rho_left])
         tr = self.settle(z[0], z[1])
         m = [self._ix[b] for b in self.motors[:2]]
@@ -319,6 +338,9 @@ class SpikingNetwork:
     def get_weight(self, pre: int, post: int) -> float:
         """Get synapse weight (normalized).
 
+        Reads the live dynamics matrix ``self.W``, so the value always
+        reflects any previous :meth:`set_weight` call.
+
         Args:
             pre (int): Presynaptic neuron body ID.
             post (int): Postsynaptic neuron body ID.
@@ -327,24 +349,27 @@ class SpikingNetwork:
             float: The normalized weight, or ``0.0`` if no connection exists.
         """
         i, j = self._ix[pre], self._ix[post]
-        mask = (self.rows == i) & (self.cols == j)
-        if not mask.any():
-            return 0.0
-        return float(self.wts[np.flatnonzero(mask)[0]])
+        return float(self.W[i, j])
 
     def set_weight(self, pre: int, post: int, w: float) -> None:
         """Set synapse weight (normalized).
+
+        Updates the dynamics matrix ``self.W`` and refreshes the wiring
+        views used by :meth:`presynaptic`/:meth:`postsynaptic`.  The raw
+        connectome snapshot ``W_raw`` (used by ``raw=True`` queries) is
+        intentionally left unchanged.  Setting ``w`` to ``0.0`` removes
+        the synapse.
 
         Args:
             pre (int): Presynaptic neuron body ID.
             post (int): Postsynaptic neuron body ID.
             w (float): New normalized weight value.
-
-        Returns:
-            None
         """
         i, j = self._ix[pre], self._ix[post]
         self.W[i, j] = w
+        if w == 0.0:
+            self.W.eliminate_zeros()
+        self._refresh_wiring_views()
 
     # ------------------------------------------------------------------
     # Wiring queries
