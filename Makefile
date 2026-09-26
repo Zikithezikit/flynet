@@ -1,6 +1,6 @@
 .PHONY: help install install-all install-dev test lint docstyle typecheck check build clean \
        examples example-basic example-connectome example-navigation example-gui \
-       example-gui-smoke \
+       example-gui-smoke figures \
        cli-list cli-simulate cli-simulate-offline cli-train cli-train-offline \
        test-neuprint test-all
 
@@ -8,6 +8,7 @@ PYTHON   := .venv/bin/python
 PIP      := .venv/bin/pip
 PYTEST   := $(PYTHON) -m pytest
 GUI_ARGS ?=
+FIGURES_ARGS ?=
 SRC      := src/flynet
 TESTS    := tests
 
@@ -88,6 +89,9 @@ example-gui: ## Open the interactive foraging GUI (real brain; needs token or wa
 
 example-gui-smoke: ## Headless foraging GUI check on the synthetic brain (no token)
 	$(PYTHON) examples/fly_foraging_gui.py --synthetic --smoke --smoke-frames 200 --speed 8
+
+figures: ## Regenerate the README figures into docs/images (needs real brain)
+	$(PYTHON) examples/make_figures.py $(FIGURES_ARGS)
 
 # ── CLI ────────────────────────────────────────────────────────────────────
 

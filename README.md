@@ -259,11 +259,13 @@ steps curve on the right tell you whether it is working.
 
 Learning uses `MotorRewardHebbian`, which reinforces only the synapses
 projecting into the motor neurons, scaled by how much each step actually
-closed on the food. On the full male CNS that lifts the rolling success rate
-from roughly 71% to 83% over ~120 hunts and cuts the average hunt from about
-121 steps to about 106, measured on a fixed set of 24 held-out start
-conditions. Keep `--eta` small (the default `0.05`): larger values learn
-faster at first and then destabilise the steering.
+closed on the food. On the full male CNS that lifts success from 71% to 83%
+over 120 hunts, measured on a fixed set of 24 held-out start conditions; the
+average hunt length improves much less (121 -> 117 steps) and wanders by a few
+steps between runs, so trust the success rate over the step count. Keep
+`--eta` small (the default `0.05`): larger values learn faster at first and
+then destabilise the steering. See
+[Does It Actually Learn?](#does-it-actually-learn) for the measured figure.
 
 ## Architecture
 
@@ -278,7 +280,7 @@ flynet/
   inhibition.py        LateralInhibition, ThresholdManager
   network.py           SpikingNetwork (rate settle, calibrate, turn)
   connectome.py        ConnectomeLoader (neuPrint fetch, disk cache, loud fetch errors)
-  learning.py          RewardHebbian, STDPTrainer, TrainingLogger
+  learning.py          RewardHebbian, MotorRewardHebbian, STDPTrainer, TrainingLogger
   jax_network.py       JaxNetwork (differentiable FLYNN-style dynamics)
   jax_trainer.py       GradientTrainer, RLTrainer, ExpertTeacher
   visualize.py         plot_brain_circuit, plot_trajectory, etc.
@@ -300,21 +302,56 @@ Red = sensors, Blue = motors, Grey = other neurons. Edges are proportional to sy
 
 ![Trajectory](docs/images/real_trajectory.png)
 
-The fly starts at (15, 20) and navigates toward food at (80, 80) by sensing a smell gradient.
-Left: before learning (77 steps). Right: after 5 episodes of Hebbian training (50 steps).
+The fly starts at (15, 20) and navigates toward food at (80, 80) by sensing a smell
+gradient. Both panels replay the **same episode seed**, so the difference is the
+learned weights and nothing else: 199 steps before training, 97 steps after 5
+episodes of reward-gated Hebbian plasticity.
 
 ### Learning Curve
 
 ![Learning Curve](docs/images/real_learning_curve.png)
 
-Steps to reach food decrease as reward-gated Hebbian plasticity strengthens co-active synapses.
+Steps to food over 30 navigation episodes on the mini brain. The smoothed curve
+falls from about 89 to about 67 steps; single hunts stay noisy, and the early
+episodes include a 144-step outlier.
+
+### Interactive Foraging GUI
+
+![Foraging GUI](docs/images/gui_foraging.png)
+
+`fly_foraging_gui.py` on the full male CNS (66,657 neurons). The arena shows the
+odor plume, the food, the fly's visual field and its path; the panel on the right
+plots hunt length and success rate while the HUD reports the live sensor
+readings, the motor command and the plasticity update that was just applied.
+
+### Does It Actually Learn?
+
+![Foraging learning](docs/images/gui_foraging_learning.png)
+
+Left: the live training signal, which is genuinely noisy. Right: the honest check
+— the untrained and the trained connectome scored on the **same 24 held-out start
+conditions** after 120 hunts. Success rises from 71% to 83% and the average hunt
+shortens from 121 to 117 steps. Keep `--eta` small: at `0.25` the fly learns
+faster at first and then destabilises.
+
+### Regenerating the figures
+
+Every image above is produced by `examples/make_figures.py`, which also prints the
+measured numbers so the captions can be checked against them:
+
+```bash
+make figures                                  # all five (needs the real brain)
+make figures FIGURES_ARGS="--only trajectory" # just one
+```
 
 ## Tested With
 
+Measured on `male-cns:v0.9`; regenerate with `make figures`.
+
 | Connectome | Neurons | Edges | Result |
 | --- | --- | --- | --- |
-| DNge104 mini brain | 41 | 40 | 100% navigation success, learning reduces path 77 -> 43 steps |
-| Full male CNS | 66,729 | 228,220 | Settles in <0.1s, 1,236 neurons activate, steering works |
+| DNge104 mini brain | 41 | 40 | Navigation succeeds; 199 -> 97 steps after 5 Hebbian episodes |
+| Full male CNS | 66,657 | 227,941 | Foraging success 71% -> 83% over 120 hunts; one settle iteration is a 228k-nnz mat-vec (~1 ms) |
 
 ## License
 

@@ -82,6 +82,7 @@ PROBE_SEED = 4242         # fixed seed so the steering probe is repeatable
 
 MIN_SPEED = 1
 MAX_SPEED = 16
+FLASH_FRAMES = 10       # how long the "FOUND FOOD!" banner stays up
 
 
 # ---------------------------------------------------------------------------
@@ -827,6 +828,7 @@ class ForagingApp:
         self.last_learn = "start"
         self.slider = None
         self.anim = None
+        self.flash_frames = 0
 
         self.fig = plt.figure(figsize=(13.0, 7.2))
         self.ax = self.fig.add_axes([0.035, 0.07, 0.55, 0.86])
@@ -911,18 +913,17 @@ class ForagingApp:
     def add_controls(self) -> None:
         """Attach the speed slider and keyboard bindings to the figure.
 
+        Safe to call without a display: the slider is just artists, so
+        the documentation figures reuse this to show it.
+
         Returns:
             None: Registers matplotlib callbacks on the figure canvas.
         """
-        import matplotlib.pyplot as plt
         from matplotlib.widgets import Slider
 
         self.fig.canvas.mpl_connect("key_press_event", self.on_key)
         self.fig.canvas.mpl_connect("close_event", self.on_close)
-        plt.show(block=False)
 
-        # Sits in the gap between the learning curve and the HUD, and
-        # starts far enough right that its label clears the arena.
         slider_ax = self.fig.add_axes([0.70, 0.605, 0.20, 0.022])
         self.slider = Slider(
             slider_ax, "steps/frame", MIN_SPEED, MAX_SPEED,
@@ -1023,6 +1024,7 @@ class ForagingApp:
                 f"{' +bonus' if ep.found else ' -penalty'}"
             )
         self.flash.set_text("FOUND FOOD!" if ep.found else "")
+        self.flash_frames = FLASH_FRAMES if ep.found else 0
         self.forager.reset()
 
     def tick(self) -> None:
@@ -1149,6 +1151,10 @@ class ForagingApp:
             "r  restart hunt     b  reset brain",
             "q  quit",
         ]
+        if self.flash_frames > 0:
+            self.flash_frames -= 1
+            if self.flash_frames == 0:
+                self.flash.set_text("")
         self.hud.set_text("\n".join(lines))
 
     def summary(self) -> str:
