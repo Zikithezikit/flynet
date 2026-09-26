@@ -300,6 +300,7 @@ class SpikingNetwork:
         rho_left: float,
         W: sp.csr_matrix | None = None,
         Minv: np.ndarray | None = None,
+        iterations: int = SETTLE,
     ) -> tuple[float, list[np.ndarray]]:
         """Compute steering command for a smell pair.
 
@@ -314,6 +315,9 @@ class SpikingNetwork:
                 If ``None``, calibration is computed fresh.  Pass a cached
                 ``Minv`` to keep steering consistent across weight updates
                 during training.
+            iterations (int): Settling iterations.  Lower values trade settling
+                accuracy for speed, which matters on the full ~66k-neuron
+                connectome where each iteration is a sparse mat-vec.
 
         Returns:
             tuple[float, list[np.ndarray]]: ``(drv, trace)`` -- the motor difference and the full
@@ -323,7 +327,7 @@ class SpikingNetwork:
         if Minv is None:
             _, Minv = self.calibrate(W=W)
         z = Minv @ np.array([rho_right, rho_left])
-        tr = self.settle(z[0], z[1])
+        tr = self.settle(z[0], z[1], iterations=iterations)
         m = [self._ix[b] for b in self.motors[:2]]
         if len(m) < 2:
             drv = float(tr[-1][m[0]])

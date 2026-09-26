@@ -89,6 +89,8 @@ Run `make help` to see all targets:
   example-basic          Run basic network example
   example-connectome     Run connectome simulation (offline)
   example-navigation     Run navigation task (offline, 5 episodes)
+  example-gui            Open the interactive foraging GUI (real brain)
+  example-gui-smoke      Headless foraging GUI check (synthetic, no token)
   cli-list               List available connectome datasets
   cli-simulate-offline   Simulate with synthetic brain (no token needed)
   cli-simulate           Simulate with real connectome (needs token)
@@ -110,7 +112,7 @@ Run `make help` to see all targets:
 | `inhibition` | Winner-takes-all and soft lateral inhibition, dynamic thresholds |
 | `network` | `SpikingNetwork` -- rate-based settling dynamics, calibration, sensor-to-motor steering |
 | `connectome` | `ConnectomeLoader` -- neuPrint fetch, disk caching, `ConnectomeUnavailableError` on fetch failure (never a silent synthetic fallback); synthetic only via `synthetic_brain()` / CLI `--offline` |
-| `learning` | `RewardHebbian` (three-factor) and `STDPTrainer` training pipelines |
+| `learning` | `RewardHebbian` and `MotorRewardHebbian` (three-factor, signed rewards) plus `STDPTrainer` pipelines |
 | `jax_network` | `JaxNetwork` -- differentiable FLYNN-style (arXiv 2607.00025) recurrent dynamics on the connectome |
 | `jax_trainer` | `GradientTrainer` (DAgger-style BPTT imitation), `RLTrainer` (REINFORCE), `ExpertTeacher` |
 | `visualize` | Brain circuits, trajectories, learning curves, spike rasters, weight heatmaps |
@@ -131,7 +133,7 @@ gradient extra:
 from flynet.connectome import ConnectomeLoader
 from flynet.network import SpikingNetwork
 
-loader = ConnectomeLoader(dataset="male-cns:v1.0")
+loader = ConnectomeLoader(dataset="male-cns:v0.9")
 
 # Small brain slice (~41 neurons around a cell type)
 ids, edges, motors = loader.load_or_fetch_mini(neuron_type="DNge104")
@@ -223,12 +225,47 @@ The `examples/` directory contains complete scripts:
 | `connectome_simulation.py` | Load real connectome and query wiring | Optional |
 | `navigation_task.py` | Fly navigates to food using real brain wiring + Hebbian learning | Optional |
 | `classification.py` | Unsupervised STDP pattern learning | No |
+| `fly_foraging_gui.py` | **Interactive GUI**: a fly forages for food with sight + smell while its brain learns live | Yes (or `--synthetic`) |
 
 ```bash
 make example-basic           # or: .venv/bin/python examples/basic_network.py
 make example-connectome      # offline connectome demo
 make example-navigation      # offline navigation with learning
+make example-gui             # interactive fly, real brain, live learning
 ```
+
+### Watch the fly learn (interactive GUI)
+
+`fly_foraging_gui.py` opens a window in which a fly walks a 2-D arena looking
+for food. It senses the world with **sight** (a forward visual field; food
+inside it is resolved onto the two eyes) and **smell** (an odor plume
+sampled at the two antennae). Both are mixed into the brain's two sensor
+channels, the real connectome settles, and the motor difference becomes a
+turn. Every hunt that ends is fed back as reward, so the fly gets better
+while you watch.
+
+```bash
+make example-gui                                  # full real brain (~66k neurons)
+make example-gui GUI_ARGS=--mini                  # 41-neuron mini brain, much faster
+.venv/bin/python examples/fly_foraging_gui.py --synthetic   # no token needed
+```
+
+Controls: `[` / `]` change the steps-per-frame speed (a slider does the
+same), `space` pauses, `r` restarts the current hunt, `b` resets the brain
+back to the connectome's own weights (handy for seeing what learning bought
+you), `q` quits. Raise the speed to learn faster: more steps per second
+means more hunts per second, and the green success-rate curve and the red
+steps curve on the right tell you whether it is working.
+
+Learning uses `MotorRewardHebbian`, which reinforces only the synapses
+projecting into the motor neurons, scaled by how much each step actually
+closed on the food. On the full male CNS that lifts success from 71% to 83%
+over 120 hunts, measured on a fixed set of 24 held-out start conditions; the
+average hunt length improves much less (121 -> 117 steps) and wanders by a few
+steps between runs, so trust the success rate over the step count. Keep
+`--eta` small (the default `0.05`): larger values learn faster at first and
+then destabilise the steering. See
+[Does It Actually Learn?](#does-it-actually-learn) for the measured figure.
 
 ## Architecture
 
@@ -243,14 +280,14 @@ flynet/
   inhibition.py        LateralInhibition, ThresholdManager
   network.py           SpikingNetwork (rate settle, calibrate, turn)
   connectome.py        ConnectomeLoader (neuPrint fetch, disk cache, loud fetch errors)
-  learning.py          RewardHebbian, STDPTrainer, TrainingLogger
+  learning.py          RewardHebbian, MotorRewardHebbian, STDPTrainer, TrainingLogger
   jax_network.py       JaxNetwork (differentiable FLYNN-style dynamics)
   jax_trainer.py       GradientTrainer, RLTrainer, ExpertTeacher
   visualize.py         plot_brain_circuit, plot_trajectory, etc.
   cli.py               flynet CLI entry point
 ```
 
-**Total: ~5,680 lines** of Python across 14 modules, with 62 tests.
+**Total: ~5,680 lines** of Python across 14 modules, with 76 tests.
 
 ## Results
 
@@ -265,21 +302,56 @@ Red = sensors, Blue = motors, Grey = other neurons. Edges are proportional to sy
 
 ![Trajectory](docs/images/real_trajectory.png)
 
-The fly starts at (15, 20) and navigates toward food at (80, 80) by sensing a smell gradient.
-Left: before learning (77 steps). Right: after 5 episodes of Hebbian training (50 steps).
+The fly starts at (15, 20) and navigates toward food at (80, 80) by sensing a smell
+gradient. Both panels replay the **same episode seed**, so the difference is the
+learned weights and nothing else: 199 steps before training, 97 steps after 5
+episodes of reward-gated Hebbian plasticity.
 
 ### Learning Curve
 
 ![Learning Curve](docs/images/real_learning_curve.png)
 
-Steps to reach food decrease as reward-gated Hebbian plasticity strengthens co-active synapses.
+Steps to food over 30 navigation episodes on the mini brain. The smoothed curve
+falls from about 89 to about 67 steps; single hunts stay noisy, and the early
+episodes include a 144-step outlier.
+
+### Interactive Foraging GUI
+
+![Foraging GUI](docs/images/gui_foraging.png)
+
+`fly_foraging_gui.py` on the full male CNS (66,657 neurons). The arena shows the
+odor plume, the food, the fly's visual field and its path; the panel on the right
+plots hunt length and success rate while the HUD reports the live sensor
+readings, the motor command and the plasticity update that was just applied.
+
+### Does It Actually Learn?
+
+![Foraging learning](docs/images/gui_foraging_learning.png)
+
+Left: the live training signal, which is genuinely noisy. Right: the honest check
+— the untrained and the trained connectome scored on the **same 24 held-out start
+conditions** after 120 hunts. Success rises from 71% to 83% and the average hunt
+shortens from 121 to 117 steps. Keep `--eta` small: at `0.25` the fly learns
+faster at first and then destabilises.
+
+### Regenerating the figures
+
+Every image above is produced by `examples/make_figures.py`, which also prints the
+measured numbers so the captions can be checked against them:
+
+```bash
+make figures                                  # all five (needs the real brain)
+make figures FIGURES_ARGS="--only trajectory" # just one
+```
 
 ## Tested With
 
+Measured on `male-cns:v0.9`; regenerate with `make figures`.
+
 | Connectome | Neurons | Edges | Result |
 | --- | --- | --- | --- |
-| DNge104 mini brain | 41 | 40 | 100% navigation success, learning reduces path 77 -> 43 steps |
-| Full male CNS | 66,729 | 228,220 | Settles in <0.1s, 1,236 neurons activate, steering works |
+| DNge104 mini brain | 41 | 40 | Navigation succeeds; 199 -> 97 steps after 5 Hebbian episodes |
+| Full male CNS | 66,657 | 227,941 | Foraging success 71% -> 83% over 120 hunts; one settle iteration is a 228k-nnz mat-vec (~1 ms) |
 
 ## License
 
