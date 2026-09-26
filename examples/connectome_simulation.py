@@ -29,7 +29,7 @@ def main() -> None:
         help="Load the cached real brain only (no network; error if not cached)",
     )
     p.add_argument("--full", action="store_true", help="Use whole connectome")
-    p.add_argument("--dataset", default="male-cns:v1.0")
+    p.add_argument("--dataset", default="male-cns:v0.9")
     p.add_argument("--neuron-type", default="DNge104")
     p.add_argument("--max-edges", type=int, default=40)
     p.add_argument("--settle", type=int, default=12)

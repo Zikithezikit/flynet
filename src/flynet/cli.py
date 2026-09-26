@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # -- flynet simulate ----------------------------------------------------
     sim = sub.add_parser("simulate", help="Run a simulation with the real or synthetic connectome")
-    sim.add_argument("--dataset", default="male-cns:v1.0",
+    sim.add_argument("--dataset", default="male-cns:v0.9",
                      help="Connectome dataset (default: %(default)s)")
     sim.add_argument("--neuron-type", default="DNge104",
                      help="Cell type for mini brain (default: %(default)s)")
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # -- flynet train -------------------------------------------------------
     tr = sub.add_parser("train", help="Train the brain (Hebbian or gradient-based)")
-    tr.add_argument("--dataset", default="male-cns:v1.0")
+    tr.add_argument("--dataset", default="male-cns:v0.9")
     tr.add_argument("--neuron-type", default="DNge104")
     tr.add_argument("--full", action="store_true")
     tr.add_argument("--episodes", type=int, default=2, help="Training episodes (default: %(default)s)")

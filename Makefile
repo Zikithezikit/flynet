@@ -1,11 +1,13 @@
 .PHONY: help install install-all install-dev test lint docstyle typecheck check build clean \
-       examples example-basic example-connectome example-navigation \
+       examples example-basic example-connectome example-navigation example-gui \
+       example-gui-smoke \
        cli-list cli-simulate cli-simulate-offline cli-train cli-train-offline \
        test-neuprint test-all
 
 PYTHON   := .venv/bin/python
 PIP      := .venv/bin/pip
 PYTEST   := $(PYTHON) -m pytest
+GUI_ARGS ?=
 SRC      := src/flynet
 TESTS    := tests
 
@@ -15,7 +17,7 @@ TESTS    := tests
 export NEUPRINT_APPLICATION_CREDENTIALS
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,12 @@ example-connectome: ## Run connectome simulation (offline)
 
 example-navigation: ## Run navigation task (offline, 5 episodes)
 	$(PYTHON) examples/navigation_task.py --episodes 5 --offline
+
+example-gui: ## Open the interactive foraging GUI (real brain; needs token or warm cache)
+	$(PYTHON) examples/fly_foraging_gui.py $(GUI_ARGS)
+
+example-gui-smoke: ## Headless foraging GUI check on the synthetic brain (no token)
+	$(PYTHON) examples/fly_foraging_gui.py --synthetic --smoke --smoke-frames 200 --speed 8
 
 # ── CLI ────────────────────────────────────────────────────────────────────
 

@@ -89,6 +89,8 @@ Run `make help` to see all targets:
   example-basic          Run basic network example
   example-connectome     Run connectome simulation (offline)
   example-navigation     Run navigation task (offline, 5 episodes)
+  example-gui            Open the interactive foraging GUI (real brain)
+  example-gui-smoke      Headless foraging GUI check (synthetic, no token)
   cli-list               List available connectome datasets
   cli-simulate-offline   Simulate with synthetic brain (no token needed)
   cli-simulate           Simulate with real connectome (needs token)
@@ -110,7 +112,7 @@ Run `make help` to see all targets:
 | `inhibition` | Winner-takes-all and soft lateral inhibition, dynamic thresholds |
 | `network` | `SpikingNetwork` -- rate-based settling dynamics, calibration, sensor-to-motor steering |
 | `connectome` | `ConnectomeLoader` -- neuPrint fetch, disk caching, `ConnectomeUnavailableError` on fetch failure (never a silent synthetic fallback); synthetic only via `synthetic_brain()` / CLI `--offline` |
-| `learning` | `RewardHebbian` (three-factor) and `STDPTrainer` training pipelines |
+| `learning` | `RewardHebbian` and `MotorRewardHebbian` (three-factor, signed rewards) plus `STDPTrainer` pipelines |
 | `jax_network` | `JaxNetwork` -- differentiable FLYNN-style (arXiv 2607.00025) recurrent dynamics on the connectome |
 | `jax_trainer` | `GradientTrainer` (DAgger-style BPTT imitation), `RLTrainer` (REINFORCE), `ExpertTeacher` |
 | `visualize` | Brain circuits, trajectories, learning curves, spike rasters, weight heatmaps |
@@ -131,7 +133,7 @@ gradient extra:
 from flynet.connectome import ConnectomeLoader
 from flynet.network import SpikingNetwork
 
-loader = ConnectomeLoader(dataset="male-cns:v1.0")
+loader = ConnectomeLoader(dataset="male-cns:v0.9")
 
 # Small brain slice (~41 neurons around a cell type)
 ids, edges, motors = loader.load_or_fetch_mini(neuron_type="DNge104")
@@ -223,12 +225,45 @@ The `examples/` directory contains complete scripts:
 | `connectome_simulation.py` | Load real connectome and query wiring | Optional |
 | `navigation_task.py` | Fly navigates to food using real brain wiring + Hebbian learning | Optional |
 | `classification.py` | Unsupervised STDP pattern learning | No |
+| `fly_foraging_gui.py` | **Interactive GUI**: a fly forages for food with sight + smell while its brain learns live | Yes (or `--synthetic`) |
 
 ```bash
 make example-basic           # or: .venv/bin/python examples/basic_network.py
 make example-connectome      # offline connectome demo
 make example-navigation      # offline navigation with learning
+make example-gui             # interactive fly, real brain, live learning
 ```
+
+### Watch the fly learn (interactive GUI)
+
+`fly_foraging_gui.py` opens a window in which a fly walks a 2-D arena looking
+for food. It senses the world with **sight** (a forward visual field; food
+inside it is resolved onto the two eyes) and **smell** (an odor plume
+sampled at the two antennae). Both are mixed into the brain's two sensor
+channels, the real connectome settles, and the motor difference becomes a
+turn. Every hunt that ends is fed back as reward, so the fly gets better
+while you watch.
+
+```bash
+make example-gui                                  # full real brain (~66k neurons)
+make example-gui GUI_ARGS=--mini                  # 41-neuron mini brain, much faster
+.venv/bin/python examples/fly_foraging_gui.py --synthetic   # no token needed
+```
+
+Controls: `[` / `]` change the steps-per-frame speed (a slider does the
+same), `space` pauses, `r` restarts the current hunt, `b` resets the brain
+back to the connectome's own weights (handy for seeing what learning bought
+you), `q` quits. Raise the speed to learn faster: more steps per second
+means more hunts per second, and the green success-rate curve and the red
+steps curve on the right tell you whether it is working.
+
+Learning uses `MotorRewardHebbian`, which reinforces only the synapses
+projecting into the motor neurons, scaled by how much each step actually
+closed on the food. On the full male CNS that lifts the rolling success rate
+from roughly 71% to 83% over ~120 hunts and cuts the average hunt from about
+121 steps to about 106, measured on a fixed set of 24 held-out start
+conditions. Keep `--eta` small (the default `0.05`): larger values learn
+faster at first and then destabilise the steering.
 
 ## Architecture
 
@@ -250,7 +285,7 @@ flynet/
   cli.py               flynet CLI entry point
 ```
 
-**Total: ~5,680 lines** of Python across 14 modules, with 62 tests.
+**Total: ~5,680 lines** of Python across 14 modules, with 76 tests.
 
 ## Results
 

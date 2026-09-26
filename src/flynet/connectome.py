@@ -52,7 +52,7 @@ class ConnectomeLoader:
 
     Attributes:
         server (str): Base URL of the neuPrint server.
-        dataset (str): Dataset identifier (e.g. ``"male-cns:v1.0"``).
+        dataset (str): Dataset identifier (e.g. ``"male-cns:v0.9"``).
         cache_dir (str): Local directory used for CSV/JSON cache files.
         last_source (str): Provenance of the most recent load --
             ``"cache"``, ``"neuprint"``, ``"synthetic"``, or ``""``.
@@ -62,8 +62,7 @@ class ConnectomeLoader:
 
     DATASETS: dict[str, str] = {
         "hemibrain:v1.2.1":  "adult FEMALE central brain (the classic hemibrain)",
-        "male-cns:v0.9":     "male CNS draft (brain + nerve cord + optic lobes)",
-        "male-cns:v1.0":     "adult MALE brain + nerve cord + optic lobes (default)",
+        "male-cns:v0.9":     "male CNS draft (brain + nerve cord + optic lobes) (default)",
         "manc:v1.0":         "adult MALE ventral nerve cord (MANC)",
         "manc:v1.2.1":       "adult MALE ventral nerve cord (MANC), updated",
         "manc:v1.2.3":       "adult MALE ventral nerve cord (MANC), current",
@@ -75,7 +74,7 @@ class ConnectomeLoader:
     def __init__(
         self,
         server: str = "https://neuprint.janelia.org",
-        dataset: str = "male-cns:v1.0",
+        dataset: str = "male-cns:v0.9",
         cache_dir: str | None = None,
     ) -> None:
         """Initialize the ConnectomeLoader.

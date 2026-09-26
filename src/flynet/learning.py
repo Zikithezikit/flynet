@@ -17,7 +17,94 @@ from flynet.synapses import SynapseList
 if TYPE_CHECKING:
     from flynet.network import SpikingNetwork
 
-__all__ = ["RewardHebbian", "STDPTrainer", "TrainingLogger"]
+__all__ = [
+    "MotorRewardHebbian",
+    "RewardHebbian",
+    "STDPTrainer",
+    "TrainingLogger",
+]
+
+
+class MotorRewardHebbian:
+    """Reward-modulated plasticity on the motor projection.
+
+    The steering command is the difference between the two motor neurons'
+    activities, and a motor's activity is
+    ``sum_pre a[pre] * W[pre, motor]``.  The synapses that can therefore
+    change the command are the ones *into* the motors, and the
+    first-order sensitivity of the command to each of them is proportional
+    to the presynaptic activity.  This rule reinforces exactly those
+    synapses, scaled by a signed reward, so a large brain learns through
+    the handful of synapses that actually drive its output instead of the
+    hundreds of thousands that do not.
+
+    Attributes:
+        eta (float): Maximum absolute weight change per update.
+        w_max (float): Upper bound on an updated weight.
+    """
+
+    def __init__(self, eta: float = 0.05, w_max: float = 1.5) -> None:
+        """Initialize the motor-projection learner.
+
+        Args:
+            eta (float): Maximum absolute weight change per update.
+            w_max (float): Upper bound on an updated weight.
+        """
+        self.eta = eta
+        self.w_max = w_max
+
+    def update(self, network: "SpikingNetwork", events: list, W: Any = None) -> None:
+        """Reinforce or weaken the synapses that project into the motors.
+
+        Args:
+            network (SpikingNetwork): Network whose ``rows``/``cols`` COO
+                views and ``motors`` define the update.
+            events (list): ``(rho_right, rho_left, activity, reward)``
+                tuples.  *activity* is a dense vector or a sparse
+                ``(indices, values)`` pair; *reward* is signed, so steps
+                that moved towards the goal strengthen the active input
+                synapses and steps that moved away weaken them.
+            W (np.ndarray | None): Weight matrix to update.  Default:
+                ``network.W``.
+
+        Returns:
+            None: Updates *W* in place.
+        """
+        if W is None:
+            W = network.W
+        rows, cols = network.rows, network.cols
+
+        motor_cols = [network._ix[b] for b in network.motors[:2]]
+        mask = np.zeros(cols.shape[0], dtype=bool)
+        for m in motor_cols:
+            mask |= cols == m
+        if not mask.any():
+            return
+
+        pre_rows = rows[mask]
+        dW = np.zeros(int(mask.sum()), dtype=np.float64)
+        n = len(network.ids)
+
+        for event in events:
+            if len(event) == 4:
+                _, _, act, reward = event
+            else:
+                _, _, act = event
+                reward = 1.0
+            if isinstance(act, tuple):
+                idx, vals = act
+                a = np.zeros(n)
+                a[idx] = vals
+            else:
+                a = act
+            dW += reward * a[pre_rows]
+
+        peak = float(np.abs(dW).max()) if dW.size else 0.0
+        if peak <= 0.0:
+            return
+        W.data[mask] = np.clip(
+            W.data[mask] + self.eta * dW / peak, -self.w_max, self.w_max
+        )
 
 
 class RewardHebbian:
@@ -40,11 +127,21 @@ class RewardHebbian:
     def update(self, network: "SpikingNetwork", events: list, W: Any = None) -> None:
         """Apply Hebbian updates to the network weights.
 
+        Each event is ``(rho_right, rho_left, activity)``.  A fourth
+        element may be supplied as an explicit signed reward, which
+        overrides the default ``rho_right + rho_left + reward_bonus``.
+        Negative rewards depress the co-active synapses, which turns the
+        rule into a proper three-factor learner: synapses active during a
+        good decision are strengthened, synapses active during a bad one
+        are weakened.
+
         Args:
             network (SpikingNetwork): SpikingNetwork instance with ``rows``
                 and ``cols`` attributes (COO views of the synapse matrix).
             events (list): List of ``(rho_right, rho_left, activity_vector)``
-                tuples from successful games.
+                tuples from successful games, optionally with a trailing
+                signed reward.  *activity* is either a dense vector or a
+                sparse ``(indices, values)`` pair.
             W (np.ndarray | None): Weight matrix to update.
                 Default: ``network.W``.
 
@@ -55,22 +152,28 @@ class RewardHebbian:
             W = network.W
         rows, cols = network.rows, network.cols
         dW = np.zeros(rows.shape[0], dtype=np.float64)
+        n = len(network.ids)
 
-        for rho_right, rho_left, act in events:
-            reward = (rho_right + rho_left) + self.reward_bonus
-            if reward <= 0:
-                continue
+        for event in events:
+            if len(event) == 4:
+                rho_right, rho_left, act, reward = event
+            else:
+                rho_right, rho_left, act = event
+                reward = (rho_right + rho_left) + self.reward_bonus
             if isinstance(act, tuple):
                 idx, vals = act
-                a = np.zeros(len(network.ids))
+                a = np.zeros(n)
                 a[idx] = vals
             else:
                 a = act
             dW += reward * (a[rows] * a[cols])
 
-        if dW.max() <= 0:
+        # Normalise by the largest magnitude so that an all-negative batch
+        # depresses instead of being skipped.
+        peak = float(np.abs(dW).max()) if dW.size else 0.0
+        if peak <= 0.0:
             return
-        W.data += self.eta * dW / dW.max()
+        W.data += self.eta * dW / peak
 
 
 class STDPTrainer:

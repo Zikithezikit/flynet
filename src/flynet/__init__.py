@@ -14,7 +14,12 @@ from flynet.receptive_fields import ReceptiveField
 from flynet.stdp import STDPRule
 from flynet.network import SpikingNetwork
 from flynet.connectome import ConnectomeLoader, ConnectomeUnavailableError
-from flynet.learning import RewardHebbian, STDPTrainer, TrainingLogger
+from flynet.learning import (
+    MotorRewardHebbian,
+    RewardHebbian,
+    STDPTrainer,
+    TrainingLogger,
+)
 from flynet.inhibition import LateralInhibition
 
 # Gradient training (optional – requires jax)
@@ -46,6 +51,7 @@ __all__ = [
     "SpikingNetwork",
     "ConnectomeLoader",
     "ConnectomeUnavailableError",
+    "MotorRewardHebbian",
     "RewardHebbian",
     "STDPTrainer",
     "TrainingLogger",
