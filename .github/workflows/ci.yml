@@ -37,3 +37,5 @@ jobs:
         run: make test-quiet PYTHON=python
         env:
           MPLBACKEND: Agg
+          # Optional repo secret; live-brain tests skip when it is empty.
+          NEUPRINT_APPLICATION_CREDENTIALS: ${{ secrets.NEUPRINT_TOKEN }}
