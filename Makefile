@@ -2,7 +2,7 @@
        examples example-basic example-connectome example-navigation example-gui \
        example-gui-smoke figures \
        cli-list cli-simulate cli-simulate-offline cli-train cli-train-offline \
-       test-neuprint test-all
+       test-neuprint test-live test-all
 
 PYTHON   := .venv/bin/python
 PIP      := .venv/bin/pip
@@ -117,6 +117,9 @@ cli-train-offline: ## Train with synthetic brain (no token needed)
 	$(PYTHON) -m flynet.cli train --offline --episodes 5
 
 # ── neuPrint (requires token) ─────────────────────────────────────────────
+
+test-live: ## End-to-end pytest against the real brain (needs token)
+	$(PYTEST) tests/test_live_brain.py -q
 
 test-neuprint: ## Test real neuPrint mini brain fetch + simulate
 ifndef NEUPRINT_APPLICATION_CREDENTIALS
