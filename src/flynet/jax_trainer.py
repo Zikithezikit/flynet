@@ -613,7 +613,7 @@ class GradientTrainer:
         total = time.time() - t0
         print(
             f"\nTraining complete: {episodes} episodes in {total:.1f}s "
-            f"({total / episodes:.2f}s/ep)"
+            f"({total / max(episodes, 1):.2f}s/ep)"
         )
         final_sr = log.episode_success_rate[-1] if log.episode_success_rate else 0.0
         print(f"Final success rate (10-ep window): {final_sr:.0%}")
@@ -1259,7 +1259,7 @@ class RLTrainer:
         total = time.time() - t0
         print(
             f"\nTraining complete: {episodes} episodes in {total:.1f}s "
-            f"({total / episodes:.2f}s/ep)"
+            f"({total / max(episodes, 1):.2f}s/ep)"
         )
         final_sr = log.episode_success_rate[-1] if log.episode_success_rate else 0.0
         print(f"Final success rate (10-ep window): {final_sr:.0%}")
